@@ -102,8 +102,22 @@ export async function apiRequest<T>(
 
   try {
     let response = await makeRequest()
-    const responseData = await response.json()
-    if (String(responseData.detail).includes("401: Token has expired")) {
+    // Clone the response to read the body without consuming the original stream
+    const responseClone = response.clone()
+    let responseData
+    
+    try {
+      responseData = await responseClone.json()
+    } catch (jsonError) {
+      // If response is not JSON, proceed with original response
+      if (!response.ok) {
+        throw new ApiError(response.status, `API request failed: ${response.statusText}`)
+      }
+      return await response.json()
+    }
+    
+    // Check for token expiration error
+    if (responseData.detail && String(responseData.detail).includes("401: Token has expired")) {
       try {
         const newToken = await refreshToken()
         
@@ -132,11 +146,12 @@ export async function apiRequest<T>(
       }
     }
 
+    // Return the new response data
     if (!response.ok) {
       throw new ApiError(response.status, `API request failed: ${response.statusText}`)
     }
-
-    return responseData
+    
+    return await response.json()
   } catch (error) {
     if (error instanceof ApiError) {
       throw error
