@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { User, LoginRequest } from '@/types'
-import { authenticateUser, logoutUser, isUserAuthenticated } from '@/lib/auth'
+import { login as apiLogin, logout as apiLogout, isAuthenticated, getStoredToken, getStoredRefreshToken } from '@/lib/api'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -13,15 +13,17 @@ export function useAuth() {
     // Check if user is already authenticated on mount
     const checkExistingAuth = () => {
       if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('ktoken')
-        const refreshToken = localStorage.getItem('krefreshToken')
-        
-        if (token && refreshToken) {
-          setUser({
-            email: '', // We don't store email in localStorage for security
-            token,
-            refreshToken,
-          })
+        if (isAuthenticated()) {
+          const token = getStoredToken()
+          const refreshToken = getStoredRefreshToken()
+          
+          if (token && refreshToken) {
+            setUser({
+              email: '', // We don't store email in localStorage for security
+              token,
+              refreshToken,
+            })
+          }
         }
       }
       setLoading(false)
@@ -35,7 +37,7 @@ export function useAuth() {
       setLoading(true)
       setError(null)
       
-      const response = await authenticateUser(credentials)
+      const response = await apiLogin(credentials)
       
       const userData: User = {
         email: credentials.email,
@@ -54,7 +56,7 @@ export function useAuth() {
   }
 
   const logout = () => {
-    logoutUser()
+    apiLogout()
     setUser(null)
     setError(null)
   }

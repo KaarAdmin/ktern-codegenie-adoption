@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { isAuthenticated } from '@/lib/api'
 
 export default function HomePage() {
   const [loading, setLoading] = useState(true)
@@ -10,10 +11,7 @@ export default function HomePage() {
   useEffect(() => {
     const checkAuth = () => {
       if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('ktoken')
-        const refreshToken = localStorage.getItem('krefreshToken')
-        
-        if (token && refreshToken) {
+        if (isAuthenticated()) {
           router.push('/dashboard')
         } else {
           router.push('/login')

@@ -85,36 +85,50 @@ export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('ktoken') : null
-  
-  const config: RequestInit = {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
+  const makeRequest = async (useRefreshedToken = false): Promise<Response> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('ktoken') : null
+    
+    const config: RequestInit = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+    }
+
+    return await fetch(url, config)
   }
 
   try {
-    let response = await fetch(url, config)
-
-    // If token expired, try to refresh and retry
-    if (response.status === 401) {
+    let response = await makeRequest()
+    const responseData = await response.json()
+    if (String(responseData.detail).includes("401: Token has expired")) {
       try {
         const newToken = await refreshToken()
-        config.headers = {
-          ...config.headers,
-          Authorization: `Bearer ${newToken}`,
+        
+        // Make the request again with the new token
+        response = await makeRequest(true)
+        
+        // If still unauthorized after refresh, clear tokens and throw error
+        if (response.status === 401) {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('ktoken')
+            localStorage.removeItem('krefreshToken')
+          }
+          throw new ApiError(401, 'Authentication required - please login again')
         }
-        response = await fetch(url, config)
       } catch (refreshError) {
         // Clear tokens and throw authentication error
         if (typeof window !== 'undefined') {
           localStorage.removeItem('ktoken')
           localStorage.removeItem('krefreshToken')
         }
-        throw new ApiError(401, 'Authentication required')
+        
+        if (refreshError instanceof ApiError) {
+          throw refreshError
+        }
+        throw new ApiError(401, 'Authentication required - please login again')
       }
     }
 
@@ -122,7 +136,7 @@ export async function apiRequest<T>(
       throw new ApiError(response.status, `API request failed: ${response.statusText}`)
     }
 
-    return await response.json()
+    return responseData
   } catch (error) {
     if (error instanceof ApiError) {
       throw error
@@ -139,8 +153,8 @@ export async function getBuildSpaceInsights(filters: FilterOptions = {}): Promis
       queryParams.append(key, value)
     }
   })
-
-  const url = `${API_BASE_URL}/codegenie/api/general/buildSpaceInsgihts?${queryParams.toString()}`
+  // console.log('Query Params:', queryParams.toString())
+  const url = `${API_BASE_URL}/codegenie/api/general/buildSpaceInsgihts${queryParams.toString()? `?${queryParams.toString()}` : ''}`
   
   return apiRequest<BuildSpaceInsightsResponse>(url)
 }
@@ -156,4 +170,8 @@ export function isAuthenticated(): boolean {
 
 export function getStoredToken(): string | null {
   return localStorage.getItem('ktoken')
+}
+
+export function getStoredRefreshToken(): string | null {
+  return localStorage.getItem('krefreshToken')
 }
