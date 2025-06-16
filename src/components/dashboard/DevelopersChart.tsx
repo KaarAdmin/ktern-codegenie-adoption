@@ -45,7 +45,7 @@ export function DevelopersChart({ data, loading = false }: DevelopersChartProps)
       if (project.members && typeof project.members === 'object') {
         Object.entries(project.members).forEach(entry => {
           if (entry && typeof entry[1] === 'string' && entry[0]!== '606dcf7d67dfbc0d60f8c633'){
-            console.log('Adding member:', entry[1])
+            // console.log('Adding member:', entry[1])
             allMembers.add(entry[1])
           }
         })
