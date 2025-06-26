@@ -31,10 +31,19 @@ export interface BuildSpace {
   totalItemCount: number;
 }
 
+export interface UserExpense {
+  projectId: string;
+  name: string;
+  user: string;
+  totalCost: number;
+  totalItemCount: number;
+}
+
 export interface BuildSpaceInsightsResponse {
   status_code: number;
   count: number;
   build_space: BuildSpace[];
+  user_expense: UserExpense[];
 }
 
 export interface DashboardMetrics {

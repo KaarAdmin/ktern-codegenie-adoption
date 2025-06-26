@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BuildSpace, BuildSpaceInsightsResponse, DashboardMetrics, FilterOptions } from '@/types'
+import { BuildSpace, BuildSpaceInsightsResponse, DashboardMetrics, FilterOptions, UserExpense } from '@/types'
 import { getBuildSpaceInsights } from '@/lib/api'
 
 export function useDashboardData(filters: FilterOptions = {}) {
   const [data, setData] = useState<BuildSpace[]>([])
+  const [userExpenseData, setUserExpenseData] = useState<UserExpense[]>([])
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -17,6 +18,7 @@ export function useDashboardData(filters: FilterOptions = {}) {
       
       const response = await getBuildSpaceInsights(filters)
       setData(response.build_space)
+      setUserExpenseData(response.user_expense || [])
       
       // Calculate metrics from the data
       const calculatedMetrics = calculateMetrics(response.build_space)
@@ -85,6 +87,7 @@ export function useDashboardData(filters: FilterOptions = {}) {
 
   return {
     data,
+    userExpenseData,
     metrics,
     loading,
     error,

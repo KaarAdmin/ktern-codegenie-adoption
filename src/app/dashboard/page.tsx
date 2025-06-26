@@ -9,6 +9,8 @@ import { ProjectsChart } from '@/components/dashboard/ProjectsChart'
 import { CostAnalytics } from '@/components/dashboard/CostAnalytics'
 import { EngagementMetrics } from '@/components/dashboard/EngagementMetrics'
 import { DevelopersChart } from '@/components/dashboard/DevelopersChart'
+import { CodeGenieVSCodeChart } from '@/components/dashboard/CodeGenieVSCodeChart'
+import { CodeGenieVSCodeMetrics } from '@/components/dashboard/CodeGenieVSCodeMetrics'
 import { FilterPanel } from '@/components/dashboard/FilterPanel'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
@@ -20,12 +22,13 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<FilterOptions>({})
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false)
+  const [activeTab, setActiveTab] = useState<'standard' | 'vscode'>('standard')
   
   // Use conditional hook based on auto-refresh setting
   const manualData = useDashboardData(filters)
   const realTimeData = useRealTimeData(filters, 30000)
   
-  const { data, metrics, loading, error, refetch } = autoRefreshEnabled ? realTimeData : manualData
+  const { data, userExpenseData, metrics, loading, error, refetch } = autoRefreshEnabled ? realTimeData : manualData
 
   React.useEffect(() => {
     // Check authentication on mount
@@ -191,102 +194,197 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Filter Panel */}
-        <FilterPanel
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onClearFilters={handleClearFilters}
-          isExpanded={isFiltersExpanded}
-          onToggleExpanded={() => setIsFiltersExpanded(!isFiltersExpanded)}
-        />
-
-        {/* Metrics Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <MetricCard
-            title="Total Projects"
-            value={metrics?.totalProjects || 0}
-            description="Projects using CodeGenie"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            }
-          />
-          <MetricCard
-            title="New Projects"
-            value={metrics?.newProjectsThisMonth || 0}
-            description="This month"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            }
-          />
-          <MetricCard
-            title="Total Developers"
-            value={metrics?.totalDevelopers || 0}
-            description="Unique developers onboarded"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-              </svg>
-            }
-          />
-          <MetricCard
-            title="Generated Applications Connected to Git"
-            value={metrics?.generatedArtifacts || 0}
-            description="Projects with Git repos"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            }
-          />
+        {/* Analytics Tabs - Moved to top */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+          {/* Tab Navigation */}
+          <div className="border-b border-gray-200 bg-gray-50">
+            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('standard')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                  activeTab === 'standard'
+                    ? 'border-blue-500 text-blue-600 bg-white rounded-t-lg -mb-px'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <span>CodeGenie Standard Edition Analytics</span>
+                  {activeTab === 'standard' && (
+                    <div className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-full">
+                      Active
+                    </div>
+                  )}
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('vscode')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                  activeTab === 'vscode'
+                    ? 'border-purple-500 text-purple-600 bg-white rounded-t-lg -mb-px'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                  <span>CodeGenie VSCode Edition Analytics</span>
+                  {activeTab === 'vscode' && (
+                    <div className="ml-2 px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
+                      Active
+                    </div>
+                  )}
+                </div>
+              </button>
+            </nav>
+          </div>
         </div>
 
-        {/* Secondary Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <MetricCard
-            title="Total Cost"
-            value={metrics ? formatCurrency(metrics.totalCost) : '$0.00'}
-            description="Across all projects"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-              </svg>
-            }
+        {/* Filter Panel - Only show for Standard Edition */}
+        {activeTab === 'standard' && (
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onClearFilters={handleClearFilters}
+            isExpanded={isFiltersExpanded}
+            onToggleExpanded={() => setIsFiltersExpanded(!isFiltersExpanded)}
           />
-          <MetricCard
-            title="Average Engagement"
-            value={metrics ? metrics.averageEngagement.toFixed(1) : '0.0'}
-            description="Interactions per project"
-            loading={loading}
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            }
-          />
-        </div>
+        )}
 
-        {/* Charts Section */}
-        <div className="space-y-8">
-          {/* Project Timeline */}
-          <ProjectsChart data={data} loading={loading} />
+        {/* Metrics Overview - Only show for Standard Edition */}
+        {activeTab === 'standard' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <MetricCard
+                title="Total Projects"
+                value={metrics?.totalProjects || 0}
+                description="Projects using CodeGenie"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                }
+              />
+              <MetricCard
+                title="New Projects"
+                value={metrics?.newProjectsThisMonth || 0}
+                description="This month"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              />
+              <MetricCard
+                title="Total Developers"
+                value={metrics?.totalDevelopers || 0}
+                description="Unique developers onboarded"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                }
+              />
+              <MetricCard
+                title="Generated Applications Connected to Git"
+                value={metrics?.generatedArtifacts || 0}
+                description="Projects with Git repos"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                }
+              />
+            </div>
 
-          {/* Cost Analytics */}
-          <CostAnalytics data={data} loading={loading} />
+            {/* Secondary Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <MetricCard
+                title="Total Cost Across All BuildSpaces"
+                value={metrics ? formatCurrency(metrics.totalCost) : '$0.00'}
+                description="Across all projects"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                }
+              />
+              <MetricCard
+                title="Average Engagement Across All BuildSpaces"
+                value={metrics ? metrics.averageEngagement.toFixed(1) : '0.0'}
+                description="Interactions per project"
+                loading={loading}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                }
+              />
+            </div>
+          </>
+        )}
 
-          {/* Engagement Metrics */}
-          <EngagementMetrics data={data} loading={loading} />
+        {/* Content Sections */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 
-          {/* Developer Analytics */}
-          <DevelopersChart data={data} loading={loading} />
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'standard' && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Standard Edition Analytics</h2>
+                    <p className="text-gray-600 mt-1">Comprehensive insights into CodeGenie Standard Edition usage and performance</p>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    <span>BuildSpace Analytics</span>
+                  </div>
+                </div>
+
+                {/* Project Timeline */}
+                <ProjectsChart data={data} loading={loading} />
+
+                {/* Cost Analytics */}
+                <CostAnalytics data={data} loading={loading} />
+
+                {/* Engagement Metrics */}
+                <EngagementMetrics data={data} loading={loading} />
+
+                {/* Developer Analytics */}
+                <DevelopersChart data={data} loading={loading} />
+              </div>
+            )}
+
+            {activeTab === 'vscode' && (
+              <div className="space-y-8 animate-fade-in">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">VSCode Edition Analytics</h2>
+                    <p className="text-gray-600 mt-1">Detailed analysis of CodeGenie VSCode Extension usage and cost metrics</p>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                    <span>User Expense Analytics</span>
+                  </div>
+                </div>
+
+                {/* CodeGenie VSCode Edition Metrics */}
+                <CodeGenieVSCodeMetrics 
+                  userExpenseData={userExpenseData || []} 
+                  standardEditionMetrics={metrics}
+                  loading={loading} 
+                />
+                
+                {/* CodeGenie VSCode Edition Charts */}
+                <CodeGenieVSCodeChart data={userExpenseData || []} loading={loading} />
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
