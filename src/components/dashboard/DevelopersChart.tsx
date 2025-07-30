@@ -202,7 +202,7 @@ export function DevelopersChart({ data, loading = false }: DevelopersChartProps)
             {/* Legend */}
             <div className="mt-4">
               <h4 className="font-medium text-gray-900 mb-3">
-                Developers
+                Top {pieData.length} Developers
                 {pieData.length > 9 && (
                   <span className="text-sm text-gray-500 font-normal ml-2">
                     (Showing {Math.min(9, pieData.length)} of {pieData.length})
