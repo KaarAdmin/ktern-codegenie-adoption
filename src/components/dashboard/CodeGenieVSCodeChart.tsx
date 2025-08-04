@@ -19,7 +19,7 @@ export function CodeGenieVSCodeChart({ data, loading = false }: CodeGenieVSCodeC
 
     return data
       .sort((a, b) => b.totalCost - a.totalCost)
-      .slice(0, 20) // Top 20 users by cost
+      .slice(0, 90) // Top 20 users by cost
   }, [data])
 
   const pieData = React.useMemo(() => {
@@ -37,7 +37,7 @@ export function CodeGenieVSCodeChart({ data, loading = false }: CodeGenieVSCodeC
   }, [userExpenseData])
 
   const barData = React.useMemo(() => {
-    return userExpenseData.slice(0, 10).map(user => ({
+    return userExpenseData.slice(0, 40).map(user => ({
       name: user.name.length > 15 ? user.name.substring(0, 15) + '...' : user.name,
       fullName: user.name,
       cost: user.totalCost,
@@ -175,7 +175,7 @@ export function CodeGenieVSCodeChart({ data, loading = false }: CodeGenieVSCodeC
               </h4>
               <div className="max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <div className="grid grid-cols-2 gap-2 pr-2">
-                  {pieData.slice(0, 10).map((entry, index) => (
+                  {pieData.slice(0, 90).map((entry, index) => (
                     <div 
                       key={entry.fullName} 
                       className={`flex items-center justify-between p-2 rounded-lg transition-colors cursor-pointer ${
@@ -237,7 +237,7 @@ export function CodeGenieVSCodeChart({ data, loading = false }: CodeGenieVSCodeC
             Cost vs Engagement Analysis
           </CardTitle>
           <p className="text-sm text-gray-600">
-            Top 10 users by cost showing cost and engagement comparison
+            Top 20 users by cost showing cost and engagement comparison
           </p>
         </CardHeader>
         <CardContent>
