@@ -1,4 +1,4 @@
-import { LoginRequest, LoginResponse, RefreshTokenRequest, BuildSpaceInsightsResponse, FilterOptions } from '@/types'
+import { LoginRequest, LoginResponse, RefreshTokenRequest, OrganizationLevelInsightsResponse, ProjectLevelInsightsResponse, UserLevelInsightsResponse } from '@/types'
 
 const LEGACY_APP_URL = process.env.NEXT_PUBLIC_LEGACY_APP_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -65,6 +65,11 @@ export async function refreshToken(): Promise<string> {
 
     const data = await response.json()
     
+    // Check if the response contains a valid token
+    if (!data.token) {
+      throw new ApiError(401, 'Invalid token refresh response')
+    }
+    
     // Update token in localStorage
     localStorage.setItem('ktoken', data.token)
     
@@ -73,6 +78,13 @@ export async function refreshToken(): Promise<string> {
     // Clear tokens if refresh fails
     localStorage.removeItem('ktoken')
     localStorage.removeItem('krefreshToken')
+    
+    // Reload window to redirect to login on refresh failure
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        window.location.reload()
+      }, 100) // Small delay to ensure cleanup completes
+    }
     
     if (error instanceof ApiError) {
       throw error
@@ -117,26 +129,30 @@ export async function apiRequest<T>(
     }
     
     // Check for token expiration error
-    if (responseData.detail && String(responseData.detail).includes("401: Token has expired")) {
+    if (responseData.detail && (String(responseData.detail).includes("401: Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired"))) {
       try {
         const newToken = await refreshToken()
         
         // Make the request again with the new token
         response = await makeRequest(true)
         
-        // If still unauthorized after refresh, clear tokens and throw error
+        // If still unauthorized after refresh, clear tokens and reload window
         if (response.status === 401) {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('ktoken')
             localStorage.removeItem('krefreshToken')
+            // Reload the window to redirect to login
+            window.location.reload()
           }
           throw new ApiError(401, 'Authentication required - please login again')
         }
       } catch (refreshError) {
-        // Clear tokens and throw authentication error
+        // Clear tokens and reload window on refresh failure
         if (typeof window !== 'undefined') {
           localStorage.removeItem('ktoken')
           localStorage.removeItem('krefreshToken')
+          // Reload the window to redirect to login
+          window.location.reload()
         }
         
         if (refreshError instanceof ApiError) {
@@ -160,18 +176,49 @@ export async function apiRequest<T>(
   }
 }
 
-export async function getBuildSpaceInsights(filters: FilterOptions = {}): Promise<BuildSpaceInsightsResponse> {
+export async function getOrganizationLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<OrganizationLevelInsightsResponse> {
   const queryParams = new URLSearchParams()
   
   Object.entries(filters).forEach(([key, value]) => {
-    if (value) {
-      queryParams.append(key, value)
+    if (value !== undefined) {
+      // Convert boolean to string
+      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
     }
   })
   // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/buildSpaceInsgihts${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+
+  return apiRequest<OrganizationLevelInsightsResponse>(url)
+}
+
+export async function getprojectLevelInsights(filters: Record<string, string | undefined | boolean> = {}): Promise<ProjectLevelInsightsResponse> {
+  const queryParams = new URLSearchParams()
   
-  return apiRequest<BuildSpaceInsightsResponse>(url)
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined) {
+      // Convert boolean to string
+      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
+    }
+  })
+  // console.log('Query Params:', queryParams.toString())
+  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+
+  return apiRequest<ProjectLevelInsightsResponse>(url)
+}
+
+export async function getUserLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelInsightsResponse> {
+  const queryParams = new URLSearchParams()
+  
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined) {
+      // Convert boolean to string
+      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
+    }
+  })
+  // console.log('Query Params:', queryParams.toString())
+  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+
+  return apiRequest<UserLevelInsightsResponse>(url)
 }
 
 export function logout(): void {
