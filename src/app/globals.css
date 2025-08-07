@@ -2,6 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+@import '../../node_modules/@syncfusion/ej2-base/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-buttons/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-dropdowns/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-grids/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-inputs/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-lists/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-navigations/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-popups/styles/material.css';
+@import "../../node_modules/@syncfusion/ej2-splitbuttons/styles/material.css";
+@import '../../node_modules/@syncfusion/ej2-calendars/styles/material.css';
+@import '../../node_modules/@syncfusion/ej2-react-pivotview/styles/material.css';
+
+/* AG Grid CSS imports */
+@import '../../node_modules/ag-grid-community/styles/ag-grid.css';
+@import '../../node_modules/ag-grid-community/styles/ag-theme-alpine.css';
+
+/* Syncfusion Pivot Table Custom Styles */
+.e-pivotview {
+  font-family: inherit !important;
+}
+
+.e-pivotview .e-grid {
+  border: 1px solid #e0e0e0 !important;
+}
+
+.e-pivotview .e-grid .e-content {
+  overflow: auto !important;
+}
+
+.e-pivotview .e-grid .e-headercontent {
+  background-color: #f5f5f5 !important;
+}
+
+.e-pivotview .e-grid .e-rowcell {
+  border-right: 1px solid #e0e0e0 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  padding: 8px !important;
+}
+
+.e-pivotview .e-grid .e-headercell {
+  border-right: 1px solid #e0e0e0 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  padding: 8px !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure pivot table is visible */
+.e-pivotview .e-grid .e-content table {
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+/* Fix for empty pivot table */
+.e-pivotview .e-grid .e-emptyrow {
+  display: none !important;
+}
+
 :root {
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;

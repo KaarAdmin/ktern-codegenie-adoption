@@ -14,67 +14,112 @@ export interface RefreshTokenRequest {
   refreshToken: string;
 }
 
-export interface BuildSpace {
-  id: string;
-  projectId: string;
-  status: string;
-  name: string;
-  description: string;
-  repositoryName: string;
-  repositoryUrl: string;
-  githubLogin: string;
-  createdBy: string;
-  owner: string;
-  members: Record<string, string>;
-  createdOn: string;
-  totalCost: number;
-  totalItemCount: number;
-}
-
-export interface UserExpense {
-  projectId: string;
-  name: string;
-  user: string;
-  totalCost: number;
-  totalItemCount: number;
-}
-
-export interface BuildSpaceInsightsResponse {
-  status_code: number;
-  count: number;
-  build_space: BuildSpace[];
-  user_expense: UserExpense[];
-}
-
-export interface DashboardMetrics {
-  totalProjects: number;
-  newProjectsThisMonth: number;
-  totalDevelopers: number;
-  generatedArtifacts: number;
-  totalCost: number;
-  averageEngagement: number;
-}
-
-export interface ChartData {
-  name: string;
-  value: number;
-  date?: string;
-  cost?: number;
-  engagement?: number;
-}
-
-export interface FilterOptions {
-  project_id?: string;
-  status?: string;
-  created_on_gt?: string;
-  created_on_lt?: string;
-  created_on_eq?: string;
-  owner?: string;
-  created_by?: string;
-}
 
 export interface User {
   email: string;
   token: string;
   refreshToken: string;
+}
+
+
+
+export interface Organization {
+  organization: string;
+  projectID: string;
+  projectName: string;
+  createdOn: string;
+  country: string;
+  sbu: string;
+  industry: string;
+  active: boolean;
+  totalUsers: number;
+  totalUsersInvited: number;
+  totalActiveUser: number;
+  totalProject: number;
+  totalActiveProject: number;
+  lastCodeGenieEventOn: string | null;
+  app_deployed_count: number;
+  app_generated_count: number;
+  totalEvents: number;
+  totalCost: number;
+  eventsLast4Weeks: number;
+  // members: Record<string; string>;
+  [key: string]: any;
+}
+
+export interface OrganizationLevelInsightsResponse {
+  status_code: number;
+  count: number;
+  organizations: OrganizationModel[];
+}
+
+export interface OrganizationModel {
+  organization: string;
+  active: boolean;
+  app_deployed_count: number;
+  app_generated_count: number;
+  country: string;
+  createdOn: string;
+  eventsLast4Weeks: number;
+  industry: string;
+  lastCodeGenieEventOn: string | null;
+  sbu: string;
+  totalActiveProject: number;
+  totalActiveUser: number;
+  totalCost: number;
+  totalEvents: number;
+  totalProject: number;
+  totalUsers: number;
+  totalUsersAccepted: number;
+  totalUsersInvited: number;
+}
+
+
+export interface ProjectModel {
+  projectId: string;
+  projectName: string;
+  createdOn: string;
+  country: string;
+  sbu: string;
+  industry: string;
+  active: boolean;
+  organizations: string[];
+  totalUsers: number;
+  totalUsersInvited: number;
+  totalUsersAccepted: number;
+  totalActiveUser: number;
+  lastCodeGenieEventOn: string | null;
+  app_deployed_count: number;
+  app_generated_count: number;
+  totalEvents: number;
+  totalCost: number;
+  eventsLast4Weeks: number;
+}
+
+export interface ProjectLevelInsightsResponse {
+  status_code: number;
+  count: number;
+  projects: ProjectModel[];
+}
+
+
+export interface UserModel {
+  email: string;
+  projectId: string;
+  organization: string;
+  app_deployed_count: number;
+  app_generated_count: number;
+  eventsLast4Weeks: number;
+  fullName: string;
+  lastCodeGenieEventOn: string | null;
+  projectName: string;
+  status: string;
+  totalCost: number;
+  totalEvents: number;
+}
+
+export interface UserLevelInsightsResponse {
+  status_code: number;
+  count: number;
+  users: UserModel[];
 }

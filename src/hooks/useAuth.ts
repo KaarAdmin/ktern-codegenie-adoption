@@ -8,6 +8,7 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tokenRefreshAttempts, setTokenRefreshAttempts] = useState(0)
 
   useEffect(() => {
     // Check if user is already authenticated on mount
@@ -59,6 +60,7 @@ export function useAuth() {
     apiLogout()
     setUser(null)
     setError(null)
+    setTokenRefreshAttempts(0)
   }
 
   // Function to update user when tokens are refreshed
@@ -71,6 +73,23 @@ export function useAuth() {
     }
   }
 
+  // Function to handle authentication errors
+  const handleAuthError = (errorMessage: string) => {
+    console.error('Authentication error:', errorMessage)
+    setError(errorMessage)
+    setTokenRefreshAttempts(prev => prev + 1)
+    
+    // If multiple refresh attempts failed, force logout and reload
+    if (tokenRefreshAttempts >= 2) {
+      logout()
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.reload()
+        }, 100)
+      }
+    }
+  }
+
   return {
     user,
     login,
@@ -78,5 +97,7 @@ export function useAuth() {
     loading,
     error,
     updateTokens,
+    handleAuthError,
+    tokenRefreshAttempts,
   }
 }
