@@ -21,6 +21,7 @@ import {
 import { Card } from '@/components/ui/Card'
 import { createProjectDataService } from '@/lib/dataService'
 import { ProjectModel } from '@/types'
+import { Expand, X } from 'lucide-react'
 
 interface ProjectChartsProps {
   filters?: Record<string, string | undefined>
@@ -31,6 +32,7 @@ import { COLORS } from '@/lib/constant'
 export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
   const [data, setData] = useState<ProjectModel[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedChart, setExpandedChart] = useState<string | null>(null)
   const dataService = useMemo(() => createProjectDataService(), [])
 
   useEffect(() => {
@@ -46,6 +48,23 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
       dataService.destroy()
     }
   }, [dataService, filters])
+
+  // Add keyboard event listener for Esc key to close expanded chart
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && expandedChart) {
+        setExpandedChart(null)
+      }
+    }
+
+    if (expandedChart) {
+      document.addEventListener('keydown', handleKeyDown)
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [expandedChart])
 
   const chartData = useMemo(() => {
     if (!data.length) return {
@@ -124,142 +143,199 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
     )
   }
 
+  const renderExpandedChart = () => {
+    if (!expandedChart) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold">
+              {expandedChart === 'cost' ? 'Top Projects by Cost Analysis' : 'Recent Project Activity Timeline'}
+            </h3>
+            <button
+              onClick={() => setExpandedChart(null)}
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <ResponsiveContainer width="100%" height={600}>
+            {expandedChart === 'cost' ? (
+              <BarChart data={chartData.costAnalysis} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="name"
+                  angle={-45}
+                  textAnchor="end"
+                  height={120}
+                  fontSize={12}
+                  interval={0}
+                />
+                <YAxis
+                  label={{ value: 'Cost ($) / Count', angle: -90, position: 'insideLeft' }}
+                  domain={['dataMin', 'dataMax']}
+                  scale="linear"
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
+                    name === 'cost' ? 'Total Cost ($)' :
+                    name === 'users' ? 'Total Users' :
+                    name === 'events' ? 'Total Events' : name
+                  ]}
+                  contentStyle={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '12px'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="cost" fill={COLORS[0]} name="Total Cost ($)" />
+                <Bar dataKey="events" fill={COLORS[1]} name="Total Events" />
+                <Bar dataKey="users" fill={COLORS[2]} name="Total Users" />
+              </BarChart>
+            ) : (
+              <LineChart data={chartData.activityTimeline} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="name"
+                  angle={-45}
+                  textAnchor="end"
+                  height={120}
+                  fontSize={12}
+                  interval={0}
+                />
+                <YAxis
+                  label={{ value: 'Events / Cost ($)', angle: -90, position: 'insideLeft' }}
+                  domain={['dataMin', 'dataMax']}
+                  scale="linear"
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    value.toLocaleString(),
+                    name === 'recentEvents' ? 'Recent Events (4 weeks)' :
+                    name === 'totalEvents' ? 'Total Events' : name
+                  ]}
+                  contentStyle={{
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '12px'
+                  }}
+                />
+                <Legend />
+                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[9]} strokeWidth={3} name="Recent Events (4 weeks)" />
+                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[10]} strokeWidth={3} name="Total Events" />
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <Card className="p-8">
-      <h3 className="text-xl font-semibold mb-8">Project-Level Insights and Analytics</h3>
-      <div className="space-y-8">
-        
-        {/* Project Cost Analysis - Full Width */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
-          <h4 className="font-medium mb-6 text-center text-lg">Top Projects by Cost Analysis</h4>
-          <ResponsiveContainer width="100%" height={500}>
-            <BarChart data={chartData.costAnalysis} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={120}
-                fontSize={10}
-                interval={0}
-                label={{ value: '', position: 'insideBottom', offset: -10 }}
-              />
-              <YAxis
-                label={{ value: 'Cost ($) / Count', angle: -90, position: 'insideLeft' }}
-              />
-              <Tooltip
-                formatter={(value, name) => [
-                  name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
-                  name === 'cost' ? 'Total Cost ($)' :
-                  name === 'users' ? 'Total Users' :
-                  name === 'events' ? 'Total Events' : name
-                ]}
-                labelFormatter={(label) => {
-                  const project = chartData.costAnalysis.find(p => p.name === label);
-                  return project ? `Project: ${project.name}\nOrganization: ${project.organization}\nTotal Cost: $${project.cost.toLocaleString()}\nTotal Users: ${project.users}\nTotal Events: ${project.events}` : label;
-                }}
-                contentStyle={{
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-line'
-                }}
-              />
-              <Legend />
-              <Bar dataKey="cost" fill={COLORS[0]} name="Total Cost ($)" />
-              <Bar dataKey="events" fill={COLORS[1]} name="Total Events" />
-              <Bar dataKey="users" fill={COLORS[2]} name="Total Users" />
-            </BarChart>
-          </ResponsiveContainer>
+    <>
+      <Card className="p-6">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-blue-600">{data.length}</div>
+            <div className="text-sm text-blue-800">Total Projects</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-green-600">
+              ${data.reduce((sum, project) => sum + project.totalCost, 0).toLocaleString()}
+            </div>
+            <div className="text-sm text-green-800">Total Cost</div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {data.reduce((sum, project) => sum + project.totalUsers, 0).toLocaleString()}
+            </div>
+            <div className="text-sm text-purple-800">Total Users</div>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-lg text-center">
+            <div className="text-2xl font-bold text-orange-600">
+              {data.reduce((sum, project) => sum + project.app_deployed_count, 0).toLocaleString()}
+            </div>
+            <div className="text-sm text-orange-800">Apps Deployed</div>
+          </div>
         </div>
 
+        {/* Compact Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Cost Analysis Chart - Compact */}
+          <div className="bg-white p-4 rounded-lg border shadow-sm relative">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-medium text-sm">Cost Analysis</h4>
+              <button
+                onClick={() => setExpandedChart('cost')}
+                className="p-1 hover:bg-gray-100 rounded"
+                title="Expand chart"
+              >
+                <Expand className="h-4 w-4" />
+              </button>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData.costAnalysis.slice(0, 5)} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" fontSize={10} angle={-45} textAnchor="end" height={40} />
+                <YAxis
+                  fontSize={10}
+                  domain={['dataMin', 'dataMax']}
+                  scale="linear"
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
+                    name === 'cost' ? 'Cost' : name === 'events' ? 'Events' : 'Users'
+                  ]}
+                  contentStyle={{ fontSize: '11px' }}
+                />
+                <Bar dataKey="cost" fill={COLORS[0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
 
-        {/* Activity Timeline - Full Width */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
-          <h4 className="font-medium mb-6 text-center text-lg">Recent Project Activity Timeline</h4>
-          <ResponsiveContainer width="100%" height={500}>
-            <LineChart data={chartData.activityTimeline} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={120}
-                fontSize={10}
-                interval={0}
-                label={{ value: '', position: 'insideBottom', offset: -10 }}
-              />
-              <YAxis
-                label={{ value: 'Events Count / Cost ($)', angle: -90, position: 'insideLeft' }}
-              />
-              <Tooltip
-                formatter={(value, name) => [
-                  value.toLocaleString(),
-                  name === 'recentEvents' ? 'Recent Events (4 weeks)' :
-                  name === 'totalEvents' ? 'Total Events' : name
-                ]}
-                labelFormatter={(label) => {
-                  const project = chartData.activityTimeline.find(p => p.name === label);
-                  return project ? `Project: ${project.name}\nRecent Events (4 weeks): ${project.recentEvents}\nTotal Events: ${project.totalEvents}\nTotal Cost: $${project.cost.toLocaleString()}` : label;
-                }}
-                contentStyle={{
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-line'
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="recentEvents"
-                stroke={COLORS[9]}
-                strokeWidth={3}
-                name="Recent Events (4 weeks)"
-                dot={{ fill: COLORS[9], strokeWidth: 2, r: 4 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="totalEvents"
-                stroke={COLORS[10]}
-                strokeWidth={3}
-                name="Total Events"
-                dot={{ fill: COLORS[10], strokeWidth: 2, r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-blue-600">
-            {data.length}
+          {/* Activity Timeline Chart - Compact */}
+          <div className="bg-white p-4 rounded-lg border shadow-sm relative">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="font-medium text-sm">Activity Timeline</h4>
+              <button
+                onClick={() => setExpandedChart('timeline')}
+                className="p-1 hover:bg-gray-100 rounded"
+                title="Expand chart"
+              >
+                <Expand className="h-4 w-4" />
+              </button>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData.activityTimeline.slice(0, 5)} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" fontSize={10} angle={-45} textAnchor="end" height={40} />
+                <YAxis
+                  fontSize={10}
+                  domain={['dataMin', 'dataMax']}
+                  scale="linear"
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    value.toLocaleString(),
+                    name === 'recentEvents' ? 'Recent Events' : 'Total Events'
+                  ]}
+                  contentStyle={{ fontSize: '11px' }}
+                />
+                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[9]} strokeWidth={2} />
+                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[10]} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-          <div className="text-sm text-blue-800">Total Projects</div>
         </div>
-        <div className="bg-green-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-green-600">
-            ${data.reduce((sum, project) => sum + project.totalCost, 0).toLocaleString()}
-          </div>
-          <div className="text-sm text-green-800">Total Cost</div>
-        </div>
-        <div className="bg-purple-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-purple-600">
-            {data.reduce((sum, project) => sum + project.totalUsers, 0).toLocaleString()}
-          </div>
-          <div className="text-sm text-purple-800">Total Users</div>
-        </div>
-        <div className="bg-orange-50 p-4 rounded-lg text-center">
-          <div className="text-2xl font-bold text-orange-600">
-            {data.reduce((sum, project) => sum + project.app_deployed_count, 0).toLocaleString()}
-          </div>
-          <div className="text-sm text-orange-800">Apps Deployed</div>
-        </div>
-      </div>
-    </Card>
+      </Card>
+      {renderExpandedChart()}
+    </>
   )
 }

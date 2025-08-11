@@ -249,11 +249,7 @@ export function UserAgGridPivot({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">User Level Insights - AG Grid Pivot</h2>
-          <p className="text-sm text-gray-600">
-            Interactive pivot table with advanced analytics • Total {state.totalCount} records
-            {state.loading && ' • Loading...'}
-          </p>
+          <h2 className="text-lg font-semibold text-gray-900">User Level Insights • Total {state.totalCount} records {state.loading && ' • Loading...'}</h2>
         </div>
         
         {/* Controls */}
