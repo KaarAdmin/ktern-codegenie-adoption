@@ -146,6 +146,7 @@ export function ProjectAgGridPivot({
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
+      minWidth: 280, // Wider for longer header
       valueFormatter: (params) => {
         if (params.value == null) return '0'
         return new Intl.NumberFormat('en-US').format(params.value)
@@ -191,6 +192,7 @@ export function ProjectAgGridPivot({
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
+      minWidth: 130,
       valueFormatter: (params) => {
         if (params.value == null) return '0'
         return new Intl.NumberFormat('en-US').format(params.value)
@@ -203,6 +205,7 @@ export function ProjectAgGridPivot({
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
+      minWidth: 140,
       valueFormatter: (params) => {
         if (params.value == null) return '0'
         return new Intl.NumberFormat('en-US').format(params.value)
@@ -236,6 +239,7 @@ export function ProjectAgGridPivot({
       enablePivot: true,
       filter: 'agDateColumnFilter',
       sortable: true,
+      minWidth: 200,
       valueFormatter: (params) => {
         if (!params.value) return 'Never'
         return new Date(params.value).toLocaleDateString()
@@ -247,14 +251,21 @@ export function ProjectAgGridPivot({
     sortable: true,
     filter: true,
     resizable: true,
-    minWidth: 100,
-    flex: 1
+    minWidth: 90,
+    // Remove flex to allow auto-sizing based on content
+    // Enable drag and drop for all columns
+    enableRowGroup: true,
+    enablePivot: true,
+    enableValue: true,
+    // Auto-size columns based on header content
+    suppressSizeToFit: false
   }), [])
 
   const autoGroupColumnDef = useMemo(() => ({
     headerName: 'Project Details',
     field: 'projectName',
     minWidth: 300,
+    pinned: 'left' as const, // Pin the group column to the left during horizontal scroll
     cellRenderer: 'agGroupCellRenderer',
     cellRendererParams: {
       suppressCount: false,
@@ -277,7 +288,10 @@ export function ProjectAgGridPivot({
           suppressPivotMode: false,
           suppressColumnFilter: false,
           suppressColumnSelectAll: false,
-          suppressColumnExpandAll: false
+          suppressColumnExpandAll: false,
+          // Enable drag and drop from tool panel
+          suppressSyncLayoutWithGrid: false,
+          suppressColumnMove: false
         }
       },
       {
@@ -367,7 +381,11 @@ export function ProjectAgGridPivot({
           pivotMode={true}
           rowGroupPanelShow="always"
           pivotPanelShow="always"
-          suppressAggFuncInHeader={false}
+          suppressAggFuncInHeader={true}
+          // Enable drag and drop functionality
+          allowDragFromColumnsToolPanel={true}
+          suppressDragLeaveHidesColumns={true}
+          suppressMoveWhenRowDragging={true}
           animateRows={true}
           enableRangeSelection={true}
           enableCharts={true}
