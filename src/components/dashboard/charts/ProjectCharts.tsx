@@ -142,7 +142,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 height={120}
                 fontSize={10}
                 interval={0}
-                label={{ value: 'Projects', position: 'insideBottom', offset: -10 }}
+                label={{ value: '', position: 'insideBottom', offset: -10 }}
               />
               <YAxis
                 label={{ value: 'Cost ($) / Count', angle: -90, position: 'insideLeft' }}
@@ -174,72 +174,6 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
           </ResponsiveContainer>
         </div>
 
-        {/* User Engagement - Full Width */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
-          <h4 className="font-medium mb-6 text-center text-lg">User Engagement by Project</h4>
-          <ResponsiveContainer width="100%" height={500}>
-            <AreaChart data={chartData.userEngagement} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={120}
-                fontSize={10}
-                interval={0}
-                label={{ value: 'Projects', position: 'insideBottom', offset: -10 }}
-              />
-              <YAxis
-                label={{ value: 'User Count', angle: -90, position: 'insideLeft' }}
-              />
-              <Tooltip
-                formatter={(value, name) => [
-                  value.toLocaleString(),
-                  name === 'invitedUsers' ? 'Invited Users' :
-                  name === 'acceptedUsers' ? 'Accepted Users' :
-                  name === 'activeUsers' ? 'Active Users' : name
-                ]}
-                labelFormatter={(label) => {
-                  const project = chartData.userEngagement.find(p => p.name === label);
-                  return project ? `Project: ${project.name}\nTotal Users: ${project.totalUsers}\nInvited Users: ${project.invitedUsers}\nAccepted Users: ${project.acceptedUsers}\nActive Users: ${project.activeUsers}` : label;
-                }}
-                contentStyle={{
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-line'
-                }}
-              />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="invitedUsers"
-                stackId="1"
-                stroke={COLORS[3]}
-                fill={COLORS[3]}
-                name="Invited Users"
-              />
-              <Area
-                type="monotone"
-                dataKey="acceptedUsers"
-                stackId="1"
-                stroke={COLORS[4]}
-                fill={COLORS[4]}
-                name="Accepted Users"
-              />
-              <Area
-                type="monotone"
-                dataKey="activeUsers"
-                stackId="1"
-                stroke={COLORS[5]}
-                fill={COLORS[5]}
-                name="Active Users"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
 
         {/* Activity Timeline - Full Width */}
         <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
@@ -254,7 +188,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 height={120}
                 fontSize={10}
                 interval={0}
-                label={{ value: 'Projects', position: 'insideBottom', offset: -10 }}
+                label={{ value: '', position: 'insideBottom', offset: -10 }}
               />
               <YAxis
                 label={{ value: 'Events Count / Cost ($)', angle: -90, position: 'insideLeft' }}

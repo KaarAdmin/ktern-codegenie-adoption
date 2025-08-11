@@ -170,7 +170,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                 height={120}
                 fontSize={10}
                 interval={0}
-                label={{ value: 'Users', position: 'insideBottom', offset: -10 }}
+                label={{ value: '', position: 'insideBottom', offset: -10 }}
               />
               <YAxis 
                 label={{ value: 'Amount ($) / Events Count', angle: -90, position: 'insideLeft' }}
@@ -202,7 +202,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
 
         {/* Cost Contribution Percentage - Full Width */}
         <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
-          <h4 className="font-medium mb-6 text-center text-lg">Top Users by Cost Contribution (%)</h4>
+          <h4 className="font-medium mb-6 text-center text-lg">Top 10 Users by Cost Contribution (%)</h4>
           <ResponsiveContainer width="100%" height={500}>
             <PieChart>
               <Pie
@@ -235,52 +235,6 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                 }}
               />
             </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Activity by Organization - Bar Chart - Full Width */}
-        <div className="bg-white p-6 rounded-lg border shadow-sm w-full">
-          <h4 className="font-medium mb-6 text-center text-lg">Activity by Organization</h4>
-          <ResponsiveContainer width="100%" height={500}>
-            <BarChart data={chartData.activityByOrganization} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="organization"
-                angle={-45}
-                textAnchor="end"
-                height={120}
-                fontSize={10}
-                interval={0}
-                label={{ value: 'Organizations', position: 'insideBottom', offset: -10 }}
-              />
-              <YAxis
-                label={{ value: 'Count / Average', angle: -90, position: 'insideLeft' }}
-              />
-              <Tooltip
-                formatter={(value, name) => [
-                  value.toLocaleString(),
-                  name === 'users' ? 'Total Users' :
-                  name === 'totalEvents' ? 'Total Events' :
-                  name === 'avgEventsPerUser' ? 'Avg Events per User' :
-                  name === 'avgCostPerUser' ? 'Avg Cost per User ($)' : name
-                ]}
-                labelFormatter={(label) => {
-                  const org = chartData.activityByOrganization.find(o => o.organization === label);
-                  return org ? `Organization: ${org.fullOrganization}\nTotal Users: ${org.users}\nTotal Events: ${org.totalEvents.toLocaleString()}\nTotal Cost: $${org.totalCost.toLocaleString()}\nAvg Events/User: ${org.avgEventsPerUser}\nAvg Cost/User: $${org.avgCostPerUser}` : label;
-                }}
-                contentStyle={{
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  whiteSpace: 'pre-line'
-                }}
-              />
-              <Legend />
-              <Bar dataKey="users" fill={COLORS[2]} name="Total Users" />
-              <Bar dataKey="avgEventsPerUser" fill={COLORS[3]} name="Avg Events per User" />
-              <Bar dataKey="avgCostPerUser" fill={COLORS[4]} name="Avg Cost per User ($)" />
-            </BarChart>
           </ResponsiveContainer>
         </div>
 

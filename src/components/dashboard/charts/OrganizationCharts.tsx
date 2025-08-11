@@ -148,7 +148,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 height={120}
                 fontSize={10}
                 interval={0}
-                label={{ value: 'Organizations', position: 'insideBottom', offset: -10 }}
+                label={{ value: '', position: 'insideBottom', offset: -10 }}
               />
               <YAxis
                 label={{ value: 'Cost ($) / User Count', angle: -90, position: 'insideLeft' }}
@@ -194,7 +194,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 height={120}
                 fontSize={10}
                 interval={0}
-                label={{ value: 'Organizations', position: 'insideBottom', offset: -10 }}
+                label={{ value: '', position: 'insideBottom', offset: -10 }}
               />
               <YAxis
                 label={{ value: 'Events Count / Active Users', angle: -90, position: 'insideLeft' }}
