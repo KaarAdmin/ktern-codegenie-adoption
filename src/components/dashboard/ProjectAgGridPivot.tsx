@@ -43,7 +43,60 @@ export function ProjectAgGridPivot({
     setGridApi(params.api)
     setColumnApi(params.columnApi)
     
+    // Load saved grid state from localStorage
+    const savedState = localStorage.getItem('projectPivotGridState')
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState)
+        params.columnApi.applyColumnState({
+          state: parsedState.columnState,
+          applyOrder: true
+        })
+        if (parsedState.filterModel) {
+          params.api.setFilterModel(parsedState.filterModel)
+        }
+      } catch (error) {
+        console.warn('Failed to restore grid state:', error)
+      }
+    }
   }, [])
+
+  // Save grid state to localStorage
+  const saveGridState = useCallback(() => {
+    if (gridApi && columnApi) {
+      const gridState = {
+        columnState: columnApi.getColumnState(),
+        filterModel: gridApi.getFilterModel(),
+        timestamp: Date.now()
+      }
+      localStorage.setItem('projectPivotGridState', JSON.stringify(gridState))
+    }
+  }, [gridApi, columnApi])
+
+  // Auto-save grid state when columns change
+  const onColumnMoved = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnResized = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnVisible = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnPinned = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onFilterChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onSortChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
 
   const handleRefresh = useCallback(() => {
     dataService.loadInitialData(filters)
@@ -75,16 +128,10 @@ export function ProjectAgGridPivot({
       sortable: true
     },
     {
-      field: 'projectId',
-      headerName: 'Project ID',
-      enablePivot: true,
-      filter: 'agTextColumnFilter',
-      sortable: true
-    },
-    {
       field: 'country',
       headerName: 'Country',
       enablePivot: true,
+      aggFunc: 'first',
       filter: 'agTextColumnFilter',
       sortable: true
     },
@@ -92,6 +139,7 @@ export function ProjectAgGridPivot({
       field: 'sbu',
       headerName: 'SBU',
       enablePivot: true,
+      aggFunc: 'first',
       filter: 'agTextColumnFilter',
       sortable: true
     },
@@ -99,15 +147,16 @@ export function ProjectAgGridPivot({
       field: 'industry',
       headerName: 'Industry',
       enablePivot: true,
+      aggFunc: 'first',
       filter: 'agTextColumnFilter',
       sortable: true
     },
     {
       field: 'active',
       headerName: 'Status',
-      enablePivot: true,
-      filter: 'agTextColumnFilter',
       sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
       valueFormatter: (params) => params.value ? 'Active' : 'Inactive'
     },
     {
@@ -225,24 +274,25 @@ export function ProjectAgGridPivot({
     {
       field: 'createdOn',
       headerName: 'Created Date',
-      enablePivot: true,
-      filter: 'agDateColumnFilter',
-      sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
       valueFormatter: (params) => {
         if (!params.value) return ''
-        return new Date(params.value).toLocaleDateString()
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
-    },
+    }
+    ,
     {
       field: 'lastCodeGenieEventOn',
       headerName: 'Latest CodeGenie Event',
-      enablePivot: true,
-      filter: 'agDateColumnFilter',
-      sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
       minWidth: 200,
       valueFormatter: (params) => {
-        if (!params.value) return 'Never'
-        return new Date(params.value).toLocaleDateString()
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
     }
   ], [])
@@ -411,6 +461,13 @@ export function ProjectAgGridPivot({
           ensureDomOrder={true}
           suppressRowClickSelection={false}
           rowSelection="multiple"
+          // Event handlers for saving grid state
+          onColumnMoved={onColumnMoved}
+          onColumnResized={onColumnResized}
+          onColumnVisible={onColumnVisible}
+          onColumnPinned={onColumnPinned}
+          onFilterChanged={onFilterChanged}
+          onSortChanged={onSortChanged}
         />
       </div>
 

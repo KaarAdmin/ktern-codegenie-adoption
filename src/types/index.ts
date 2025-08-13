@@ -22,31 +22,6 @@ export interface User {
 }
 
 
-
-export interface Organization {
-  organization: string;
-  projectID: string;
-  projectName: string;
-  createdOn: string;
-  country: string;
-  sbu: string;
-  industry: string;
-  active: boolean;
-  totalUsers: number;
-  totalUsersInvited: number;
-  totalActiveUser: number;
-  totalProject: number;
-  totalActiveProject: number;
-  lastCodeGenieEventOn: string | null;
-  app_deployed_count: number;
-  app_generated_count: number;
-  totalEvents: number;
-  totalCost: number;
-  eventsLast4Weeks: number;
-  // members: Record<string; string>;
-  [key: string]: any;
-}
-
 export interface OrganizationLevelInsightsResponse {
   status_code: number;
   count: number;

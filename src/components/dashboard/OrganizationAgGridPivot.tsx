@@ -42,7 +42,61 @@ export function OrganizationAgGridPivot({
   const onGridReady = useCallback((params: GridReadyEvent) => {
     setGridApi(params.api)
     setColumnApi(params.columnApi)
+    
+    // Load saved grid state from localStorage
+    const savedState = localStorage.getItem('organizationPivotGridState')
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState)
+        params.columnApi.applyColumnState({
+          state: parsedState.columnState,
+          applyOrder: true
+        })
+        if (parsedState.filterModel) {
+          params.api.setFilterModel(parsedState.filterModel)
+        }
+      } catch (error) {
+        console.warn('Failed to restore grid state:', error)
+      }
+    }
   }, [])
+
+  // Save grid state to localStorage
+  const saveGridState = useCallback(() => {
+    if (gridApi && columnApi) {
+      const gridState = {
+        columnState: columnApi.getColumnState(),
+        filterModel: gridApi.getFilterModel(),
+        timestamp: Date.now()
+      }
+      localStorage.setItem('organizationPivotGridState', JSON.stringify(gridState))
+    }
+  }, [gridApi, columnApi])
+
+  // Auto-save grid state when columns change
+  const onColumnMoved = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnResized = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnVisible = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnPinned = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onFilterChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onSortChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
 
   const handleRefresh = useCallback(() => {
     dataService.loadInitialData(filters)
@@ -63,6 +117,7 @@ export function OrganizationAgGridPivot({
       headerName: 'Country',
       enablePivot: true,
       filter: 'agTextColumnFilter',
+      aggFunc: 'first',
       sortable: true
     },
     {
@@ -70,6 +125,7 @@ export function OrganizationAgGridPivot({
       headerName: 'SBU',
       enablePivot: true,
       filter: 'agTextColumnFilter',
+      aggFunc: 'first',
       sortable: true
     },
     {
@@ -77,14 +133,14 @@ export function OrganizationAgGridPivot({
       headerName: 'Industry',
       enablePivot: true,
       filter: 'agTextColumnFilter',
+      aggFunc: 'first',
       sortable: true
     },
     {
       field: 'active',
       headerName: 'Status',
-      enablePivot: true,
-      filter: 'agTextColumnFilter',
-      sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
       valueFormatter: (params) => params.value ? 'Active' : 'Inactive'
     },
     {
@@ -143,6 +199,18 @@ export function OrganizationAgGridPivot({
     {
       field: 'app_generated_count',
       headerName: 'Apps Generated',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      }
+    },
+    {
+      field: 'totalUsers',
+      headerName: 'Total Users',
+      aggFunc: 'sum',
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
@@ -213,24 +281,25 @@ export function OrganizationAgGridPivot({
     {
       field: 'createdOn',
       headerName: 'Created Date',
-      enablePivot: true,
-      filter: 'agDateColumnFilter',
-      sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
       valueFormatter: (params) => {
         if (!params.value) return ''
-        return new Date(params.value).toLocaleDateString()
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
-    },
+    }
+    ,
     {
       field: 'lastCodeGenieEventOn',
       headerName: 'Latest CodeGenie Event',
-      enablePivot: true,
-      filter: 'agDateColumnFilter',
-      sortable: true,
+      enableValue: true,
       minWidth: 200,
+      aggFunc: 'first',
       valueFormatter: (params) => {
-        if (!params.value) return 'Never'
-        return new Date(params.value).toLocaleDateString()
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
     }
   ], [])
@@ -399,6 +468,13 @@ export function OrganizationAgGridPivot({
           ensureDomOrder={true}
           suppressRowClickSelection={false}
           rowSelection="multiple"
+          // Event handlers for saving grid state
+          onColumnMoved={onColumnMoved}
+          onColumnResized={onColumnResized}
+          onColumnVisible={onColumnVisible}
+          onColumnPinned={onColumnPinned}
+          onFilterChanged={onFilterChanged}
+          onSortChanged={onSortChanged}
         />
       </div>
 

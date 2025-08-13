@@ -43,7 +43,60 @@ export function UserAgGridPivot({
     setGridApi(params.api)
     setColumnApi(params.columnApi)
     
+    // Load saved grid state from localStorage
+    const savedState = localStorage.getItem('userPivotGridState')
+    if (savedState) {
+      try {
+        const parsedState = JSON.parse(savedState)
+        params.columnApi.applyColumnState({
+          state: parsedState.columnState,
+          applyOrder: true
+        })
+        if (parsedState.filterModel) {
+          params.api.setFilterModel(parsedState.filterModel)
+        }
+      } catch (error) {
+        console.warn('Failed to restore grid state:', error)
+      }
+    }
   }, [])
+
+  // Save grid state to localStorage
+  const saveGridState = useCallback(() => {
+    if (gridApi && columnApi) {
+      const gridState = {
+        columnState: columnApi.getColumnState(),
+        filterModel: gridApi.getFilterModel(),
+        timestamp: Date.now()
+      }
+      localStorage.setItem('userPivotGridState', JSON.stringify(gridState))
+    }
+  }, [gridApi, columnApi])
+
+  // Auto-save grid state when columns change
+  const onColumnMoved = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnResized = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnVisible = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onColumnPinned = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onFilterChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
+
+  const onSortChanged = useCallback(() => {
+    saveGridState()
+  }, [saveGridState])
 
   const handleRefresh = useCallback(() => {
     dataService.loadInitialData(filters)
@@ -80,23 +133,19 @@ export function UserAgGridPivot({
     {
       field: 'email',
       headerName: 'Email',
+      enableRowGroup: true,
       enablePivot: true,
-      filter: 'agTextColumnFilter',
-      sortable: true
-    },
-    {
-      field: 'projectId',
-      headerName: 'Project ID',
-      enablePivot: true,
+      aggFunc: 'first',
       filter: 'agTextColumnFilter',
       sortable: true
     },
     {
       field: 'status',
       headerName: 'Status',
-      enablePivot: true,
-      filter: 'agTextColumnFilter',
-      sortable: true
+      sortable: true,
+      enableValue: true,
+      aggFunc: 'first',
+      valueFormatter: (params) => params.value ? 'Active' : 'Inactive'
     },
     {
       field: 'totalCost',
@@ -167,13 +216,13 @@ export function UserAgGridPivot({
     {
       field: 'lastCodeGenieEventOn',
       headerName: 'Latest CodeGenie Event',
-      enablePivot: true,
-      filter: 'agDateColumnFilter',
-      sortable: true,
+      enableValue: true,
       minWidth: 200,
+      aggFunc: 'first',
       valueFormatter: (params) => {
-        if (!params.value) return 'Never'
-        return new Date(params.value).toLocaleDateString()
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
     }
   ], [])
@@ -342,6 +391,13 @@ export function UserAgGridPivot({
           ensureDomOrder={true}
           suppressRowClickSelection={false}
           rowSelection="multiple"
+          // Event handlers for saving grid state
+          onColumnMoved={onColumnMoved}
+          onColumnResized={onColumnResized}
+          onColumnVisible={onColumnVisible}
+          onColumnPinned={onColumnPinned}
+          onFilterChanged={onFilterChanged}
+          onSortChanged={onSortChanged}
         />
       </div>
 
