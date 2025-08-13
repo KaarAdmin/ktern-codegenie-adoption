@@ -593,7 +593,7 @@ export function ProjectAgGridPivot({
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Editing Information Banner */}
-      {isEditMode && !isPivotMode && (
+      {isEditMode && !isPivotMode &&  isUserAuthorized &&(
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start">
             <div className="flex-shrink-0">
@@ -612,7 +612,7 @@ export function ProjectAgGridPivot({
       )}
 
       {/* Pivot Mode Information Banner */}
-      {isPivotMode && (
+      {isPivotMode &&  isUserAuthorized &&(
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-start">
             <div className="flex-shrink-0">
