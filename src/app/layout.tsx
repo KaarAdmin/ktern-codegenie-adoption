@@ -21,6 +21,7 @@ export default function RootLayout({
         <ClientLayout>
           {children}
         </ClientLayout>
+        <div id="toast-portal"></div>
       </body>
     </html>
   )

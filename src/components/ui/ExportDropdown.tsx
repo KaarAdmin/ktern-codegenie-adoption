@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { GridApi, ColDef } from 'ag-grid-community'
+import { useToastActions } from '@/contexts/ToastContext'
 
 interface ExportDropdownProps {
   gridApi: GridApi | null
@@ -12,6 +13,7 @@ interface ExportDropdownProps {
 export function ExportDropdown({ gridApi, entityName, disabled = false }: ExportDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const { showSuccess, showError, showWarning, showInfo } = useToastActions()
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -40,6 +42,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         onlySelected: false,
         onlySelectedAllPages: false
       })
+      showSuccess(`${entityName} exported to CSV successfully`)
     }
     setIsOpen(false)
   }
@@ -60,6 +63,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         onlySelected: false,
         onlySelectedAllPages: false
       })
+      showSuccess(`${entityName} exported to Excel successfully`)
     }
     setIsOpen(false)
   }
@@ -68,7 +72,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
     if (gridApi) {
       const selectedRows = gridApi.getSelectedRows()
       if (selectedRows.length === 0) {
-        alert('Please select rows to export')
+        showWarning('Please select rows to export')
         return
       }
       gridApi.exportDataAsCsv({
@@ -78,6 +82,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         suppressQuotes: false,
         skipColumnHeaders: false
       })
+      showSuccess(`Selected ${entityName.toLowerCase()} exported to CSV successfully`)
     }
     setIsOpen(false)
   }
@@ -86,7 +91,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
     if (gridApi) {
       const selectedRows = gridApi.getSelectedRows()
       if (selectedRows.length === 0) {
-        alert('Please select rows to export')
+        showWarning('Please select rows to export')
         return
       }
       gridApi.exportDataAsExcel({
@@ -98,6 +103,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         rowHeight: 20,
         skipColumnHeaders: false
       })
+      showSuccess(`Selected ${entityName.toLowerCase()} exported to Excel successfully`)
     }
     setIsOpen(false)
   }
@@ -112,6 +118,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         skipColumnHeaders: false,
         skipColumnGroupHeaders: false
       })
+      showSuccess(`Visible ${entityName.toLowerCase()} columns exported to CSV successfully`)
     }
     setIsOpen(false)
   }
@@ -128,6 +135,7 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         skipColumnHeaders: false,
         skipColumnGroupHeaders: false
       })
+      showSuccess(`Visible ${entityName.toLowerCase()} columns exported to Excel successfully`)
     }
     setIsOpen(false)
   }
@@ -270,6 +278,9 @@ export function ExportDropdown({ gridApi, entityName, disabled = false }: Export
         
         printWindow.document.write(htmlContent)
         printWindow.document.close()
+        showInfo(`${entityName} print preview opened in new window`)
+      } else {
+        showError('Unable to open print window. Please check your browser\'s popup settings.')
       }
     }
     setIsOpen(false)

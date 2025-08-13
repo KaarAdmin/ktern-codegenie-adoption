@@ -4,8 +4,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef, GridReadyEvent, GridApi, ColumnApi } from 'ag-grid-community'
 import { createProjectDataService, DataServiceState } from '@/lib/dataService'
+import { updateProjectData } from '@/lib/api'
 import { ProjectModel } from '@/types'
 import { ExportDropdown } from '@/components/ui/ExportDropdown'
+import { isAuthorizedUser, getCurrentUserEmail } from '@/lib/auth'
+import { useToastActions } from '@/contexts/ToastContext'
 import 'ag-grid-enterprise'
 
 interface ProjectAgGridPivotProps {
@@ -20,6 +23,10 @@ export function ProjectAgGridPivot({
   const [gridApi, setGridApi] = useState<GridApi | null>(null)
   const [columnApi, setColumnApi] = useState<ColumnApi | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [isPivotMode, setIsPivotMode] = useState(true)
+  const [changedRows, setChangedRows] = useState<Set<string>>(new Set())
+  const [isUserAuthorized, setIsUserAuthorized] = useState(false)
   const [state, setState] = useState<DataServiceState<ProjectModel>>({
     data: [],
     loading: true,
@@ -29,7 +36,22 @@ export function ProjectAgGridPivot({
     totalCount: 0
   })
 
+  const { showSuccess, showError, showWarning, showInfo } = useToastActions()
   const dataService = useMemo(() => createProjectDataService(), [])
+
+  // Check user authorization on component mount
+  useEffect(() => {
+    const checkAuth = () => {
+      const authorized = isAuthorizedUser()
+      setIsUserAuthorized(authorized)
+      console.log('User authorization check:', {
+        authorized,
+        email: getCurrentUserEmail()
+      })
+    }
+    
+    checkAuth()
+  }, [])
 
   useEffect(() => {
     const unsubscribe = dataService.subscribe(setState)
@@ -119,6 +141,126 @@ export function ProjectAgGridPivot({
     dataService.loadInitialData(filters)
   }, [dataService, filters])
 
+  const handleToggleEditMode = useCallback(() => {
+    if (!isUserAuthorized) {
+      showError('You are not authorized to edit this data. Please contact your administrator.')
+      return
+    }
+    setIsEditMode(!isEditMode)
+    setChangedRows(new Set())
+    if (gridApi) {
+      gridApi.refreshCells()
+    }
+  }, [isEditMode, gridApi, isUserAuthorized, showError])
+
+  const handleTogglePivotMode = useCallback(() => {
+    setIsPivotMode(!isPivotMode)
+    setChangedRows(new Set())
+    if (gridApi) {
+      gridApi.setPivotMode(!isPivotMode)
+    }
+  }, [isPivotMode, gridApi])
+
+  const handleCellValueChanged = useCallback((event: any) => {
+    if (event.data && event.data.projectId) {
+      setChangedRows(prev => new Set(prev).add(event.data.projectId))
+      console.log('Cell value changed:', {
+        rowId: event.data.projectId,
+        field: event.colDef.field,
+        oldValue: event.oldValue,
+        newValue: event.newValue,
+        rowData: event.data
+      })
+      
+      // Refresh the row to apply the new cell styling
+      if (gridApi) {
+        gridApi.refreshCells({
+          rowNodes: [event.node],
+          force: true
+        })
+      }
+    }
+  }, [gridApi])
+
+  const handleSaveChanges = useCallback(async () => {
+    if (!gridApi) return
+
+    const changedData: any[] = []
+    gridApi.forEachNode((node) => {
+      if (node.data && changedRows.has(node.data.projectId)) {
+        changedData.push(node.data)
+      }
+    })
+
+    console.log('Saving changes:', {
+      totalChangedRows: changedRows.size,
+      changedData: changedData
+    })
+
+    try {
+      // Show loading state
+      const saveButton = document.querySelector('[data-save-button]') as HTMLButtonElement
+      if (saveButton) {
+        saveButton.disabled = true
+        saveButton.textContent = 'Saving...'
+      }
+
+      // Make API call to save the data
+      const result = await updateProjectData(changedData)
+      
+      if (result.status_code === 201) {
+        setChangedRows(new Set())
+        showSuccess(`Successfully saved ${changedData.length} changed rows.`)
+        // Optionally refresh the data
+        handleRefresh()
+      } else {
+        showError(`Failed to save changes: ${result.detail}`)
+      }
+    } catch (error) {
+      console.error('Error saving changes:', error)
+      showError(`Error saving changes: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      // Reset button state
+      const saveButton = document.querySelector('[data-save-button]') as HTMLButtonElement
+      if (saveButton) {
+        saveButton.disabled = false
+        saveButton.textContent = `Save Changes (${changedRows.size})`
+      }
+    }
+  }, [gridApi, changedRows, handleRefresh, showSuccess, showError])
+
+  // Custom function to check if a node is editable
+  const isRowEditable = useCallback((params: any) => {
+    // Only allow editing if user is authorized, in edit mode, NOT in pivot mode, and has actual data
+    return isUserAuthorized && isEditMode && !isPivotMode && params.data && params.data.projectId
+  }, [isUserAuthorized, isEditMode, isPivotMode])
+
+  // Custom cell editor for numeric fields with validation
+  const numericCellEditor = useCallback((params: any) => {
+    return {
+      component: 'agTextCellEditor',
+      params: {
+        ...params,
+        // Add validation for numeric fields
+        parseValue: (value: string) => {
+          const numValue = parseFloat(value)
+          return isNaN(numValue) ? 0 : numValue
+        },
+        formatValue: (value: number) => {
+          return value?.toString() || '0'
+        }
+      }
+    }
+  }, [])
+
+  // Custom cell style function to highlight edited cells
+  const getCellStyle = useCallback((params: any) => {
+    if (params.data && changedRows.has(params.data.projectId)) {
+      return { backgroundColor: '#fff3cd', border: '1px solid #ffc107' }
+    }
+    return null
+  }, [changedRows])
+
   const columnDefs: ColDef[] = useMemo(() => [
     {
       field: 'organizations',
@@ -150,7 +292,9 @@ export function ProjectAgGridPivot({
       enablePivot: true,
       aggFunc: 'first',
       filter: 'agTextColumnFilter',
-      sortable: true
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
     },
     {
       field: 'sbu',
@@ -158,7 +302,9 @@ export function ProjectAgGridPivot({
       enablePivot: true,
       aggFunc: 'first',
       filter: 'agTextColumnFilter',
-      sortable: true
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
     },
     {
       field: 'industry',
@@ -166,16 +312,47 @@ export function ProjectAgGridPivot({
       enablePivot: true,
       aggFunc: 'first',
       filter: 'agTextColumnFilter',
-      sortable: true
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
     },
     {
       field: 'active',
       headerName: 'Status',
       sortable: true,
       enableValue: true,
-      aggFunc: 'first',
-      valueFormatter: (params) => params.value ? 'Active' : 'Inactive',
-      getQuickFilterText: (params) => params.value ? 'Active' : 'Inactive'
+      aggFunc: (params) => {
+        const values = params.values as string[];
+        if (!values || values.length === 0) return null;
+
+        const counts = values.reduce((acc, val) => {
+          acc[val] = (acc[val] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        // Pick the most frequent value, breaking ties by preferring "Active"
+        return Object.entries(counts).reduce((a, b) => {
+          if (b[1] > a[1]) return b;
+          if (b[1] === a[1]) {
+            if (b[0] === 'Active') return b; // prefer Active in ties
+          }
+          return a;
+        })[0];
+      },
+      editable: isRowEditable,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: {
+        values: ['Active', 'Inactive']
+      },
+      valueGetter: (params) => params.data?.active ? 'Active' : 'Inactive',
+      valueSetter: (params) => {
+        const newValue = params.newValue === 'Active'
+        params.data.active = newValue
+        return true
+      },
+      valueFormatter: (params) => params.value,
+      getQuickFilterText: (params) => params.value,
+      cellStyle: getCellStyle
     },
     {
       field: 'totalCost',
@@ -225,10 +402,19 @@ export function ProjectAgGridPivot({
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
+      editable: isRowEditable,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseInt(value, 10)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
       valueFormatter: (params) => {
         if (params.value == null) return '0'
         return new Intl.NumberFormat('en-US').format(params.value)
-      }
+      },
+      cellStyle: getCellStyle
     },
     {
       field: 'app_generated_count',
@@ -236,10 +422,19 @@ export function ProjectAgGridPivot({
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
+      editable: isRowEditable,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseInt(value, 10)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
       valueFormatter: (params) => {
         if (params.value == null) return '0'
         return new Intl.NumberFormat('en-US').format(params.value)
-      }
+      },
+      cellStyle: getCellStyle
     },
     {
       field: 'totalUsers',
@@ -313,7 +508,7 @@ export function ProjectAgGridPivot({
         return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
     }
-  ], [])
+  ], [isRowEditable])
 
   const defaultColDef = useMemo(() => ({
     sortable: true,
@@ -326,7 +521,9 @@ export function ProjectAgGridPivot({
     enablePivot: true,
     enableValue: true,
     // Auto-size columns based on header content
-    suppressSizeToFit: false
+    suppressSizeToFit: false,
+    // Don't make all columns editable by default - only those explicitly marked as editable
+    editable: false
   }), [])
 
   const autoGroupColumnDef = useMemo(() => ({
@@ -395,6 +592,44 @@ export function ProjectAgGridPivot({
 
   return (
     <div className={`space-y-4 ${className}`}>
+      {/* Editing Information Banner */}
+      {isEditMode && !isPivotMode && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">Edit Mode Active</h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>You can now edit cells by double-clicking on them. Editable fields include: Country, SBU, Industry, Status, Apps Deployed, and Apps Generated. Click "Save Changes" when you're done editing.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pivot Mode Information Banner */}
+      {isPivotMode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-amber-800">Pivot Mode - Editing Disabled</h3>
+              <div className="mt-2 text-sm text-amber-700">
+                <p>Pivot tables show aggregated data, so direct editing is not available. To edit data, switch to "Table View" first, then enable "Edit Mode". Changes to source data will automatically update the pivot table when you switch back.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -447,6 +682,44 @@ export function ProjectAgGridPivot({
               </div>
             )}
           </button>
+          
+          <button
+            onClick={handleTogglePivotMode}
+            className={`px-3 py-1 text-xs font-medium rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              isPivotMode
+                ? 'text-white bg-purple-600 border-purple-600 hover:bg-purple-700'
+                : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {isPivotMode ? 'Table View' : 'Pivot View'}
+          </button>
+          
+          {isUserAuthorized && (
+            <>
+              <button
+                onClick={handleToggleEditMode}
+                disabled={isPivotMode}
+                className={`px-3 py-1 text-xs font-medium rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isEditMode
+                    ? 'text-white bg-blue-600 border-blue-600 hover:bg-blue-700'
+                    : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50'
+                }`}
+                title={isPivotMode ? 'Switch to Table View to enable editing' : ''}
+              >
+                {isEditMode ? 'Exit Edit Mode' : 'Edit Mode'}
+              </button>
+              {isEditMode && changedRows.size > 0 && !isPivotMode && (
+                <button
+                  data-save-button
+                  onClick={handleSaveChanges}
+                  className="px-3 py-1 text-xs font-medium text-white bg-green-600 border border-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save Changes ({changedRows.size})
+                </button>
+              )}
+            </>
+          )}
+          
           <ExportDropdown
             gridApi={gridApi}
             entityName="Projects"
@@ -464,9 +737,9 @@ export function ProjectAgGridPivot({
           autoGroupColumnDef={autoGroupColumnDef}
           onGridReady={onGridReady}
           sideBar={sideBar}
-          pivotMode={true}
-          rowGroupPanelShow="always"
-          pivotPanelShow="always"
+          pivotMode={isPivotMode}
+          rowGroupPanelShow={isPivotMode ? "always" : "never"}
+          pivotPanelShow={isPivotMode ? "always" : "never"}
           suppressAggFuncInHeader={true}
           // Enable drag and drop functionality
           allowDragFromColumnsToolPanel={true}
@@ -504,6 +777,10 @@ export function ProjectAgGridPivot({
           onColumnPinned={onColumnPinned}
           onFilterChanged={onFilterChanged}
           onSortChanged={onSortChanged}
+          onCellValueChanged={handleCellValueChanged}
+          stopEditingWhenCellsLoseFocus={true}
+          undoRedoCellEditing={true}
+          undoRedoCellEditingLimit={20}
         />
       </div>
 

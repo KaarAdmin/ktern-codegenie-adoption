@@ -221,6 +221,34 @@ export async function getUserLevelInsightsResponse(filters: Record<string, strin
   return apiRequest<UserLevelInsightsResponse>(url)
 }
 
+// Update functions for pivot table data
+export async function updateOrganizationData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ organizations: data }),
+  })
+}
+
+export async function updateProjectData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ projects: data }),
+  })
+}
+
+export async function updateUserData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ users: data }),
+  })
+}
+
 export function logout(): void {
   localStorage.removeItem('ktoken')
   localStorage.removeItem('krefreshToken')
