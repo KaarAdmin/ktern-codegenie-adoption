@@ -5,6 +5,7 @@ import { AgGridReact } from 'ag-grid-react'
 import { ColDef, GridReadyEvent, GridApi, ColumnApi } from 'ag-grid-community'
 import { createOrganizationDataService, DataServiceState } from '@/lib/dataService'
 import { OrganizationModel } from '@/types'
+import { ExportDropdown } from '@/components/ui/ExportDropdown'
 import 'ag-grid-enterprise'
 
 interface OrganizationAgGridPivotProps {
@@ -453,18 +454,11 @@ export function OrganizationAgGridPivot({
               </div>
             )}
           </button>
-          <button
-            onClick={() => gridApi?.exportDataAsCsv()}
-            className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={() => gridApi?.exportDataAsExcel()}
-            className="px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Export Excel
-          </button>
+          <ExportDropdown
+            gridApi={gridApi}
+            entityName="Organizations"
+            disabled={state.loading}
+          />
         </div>
       </div>
 
