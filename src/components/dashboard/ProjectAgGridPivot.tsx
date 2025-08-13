@@ -12,12 +12,13 @@ interface ProjectAgGridPivotProps {
   className?: string
 }
 
-export function ProjectAgGridPivot({ 
-  filters = {}, 
-  className = '' 
+export function ProjectAgGridPivot({
+  filters = {},
+  className = ''
 }: ProjectAgGridPivotProps) {
   const [gridApi, setGridApi] = useState<GridApi | null>(null)
   const [columnApi, setColumnApi] = useState<ColumnApi | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
   const [state, setState] = useState<DataServiceState<ProjectModel>>({
     data: [],
     loading: true,
@@ -59,6 +60,21 @@ export function ProjectAgGridPivot({
         console.warn('Failed to restore grid state:', error)
       }
     }
+  }, [])
+
+  // Apply search filter
+  useEffect(() => {
+    if (gridApi) {
+      gridApi.setQuickFilter(searchTerm)
+    }
+  }, [gridApi, searchTerm])
+
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value)
+  }, [])
+
+  const handleClearSearch = useCallback(() => {
+    setSearchTerm('')
   }, [])
 
   // Save grid state to localStorage
@@ -157,7 +173,8 @@ export function ProjectAgGridPivot({
       sortable: true,
       enableValue: true,
       aggFunc: 'first',
-      valueFormatter: (params) => params.value ? 'Active' : 'Inactive'
+      valueFormatter: (params) => params.value ? 'Active' : 'Inactive',
+      getQuickFilterText: (params) => params.value ? 'Active' : 'Inactive'
     },
     {
       field: 'totalCost',
@@ -379,12 +396,37 @@ export function ProjectAgGridPivot({
     <div className={`space-y-4 ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center space-x-4">
           <h2 className="text-lg font-semibold text-gray-900">Project Level Insights • Total {state.totalCount} records {state.loading && ' • Loading...'}</h2>
         </div>
         
-        {/* Controls */}
-        <div className="flex items-center space-x-2">
+        {/* Search and Controls */}
+        <div className="flex items-center space-x-3">
+          {/* Search Input */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Search projects..."
+              className="block w-64 pl-10 pr-10 py-1.5 text-sm text-gray-900 placeholder-gray-500 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-gray-600 text-gray-400"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
           <button
             onClick={handleRefresh}
             disabled={state.loading}
