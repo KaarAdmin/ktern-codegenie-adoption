@@ -188,7 +188,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                     name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
                     name === 'cost' ? 'Total Cost ($)' :
                     name === 'users' ? 'Total Users' :
-                    name === 'events' ? 'Total Events' : name
+                    name === 'events' ? 'Total Agentic Tasks' : name
                   ]}
                   contentStyle={{
                     backgroundColor: '#f8fafc',
@@ -200,7 +200,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 <Legend />
                 <Bar dataKey="cost" fill={COLORS[0]} name="Total Cost ($)" />
                 <Bar dataKey="users" fill={COLORS[1]} name="Total Users" />
-                <Bar dataKey="events" fill={COLORS[2]} name="Total Events" />
+                <Bar dataKey="events" fill={COLORS[2]} name="Total Agentic Tasks" />
               </BarChart>
             ) : (
               <LineChart data={chartData.eventsTimeline} margin={{ top: 20, right: 30, left: 60, bottom: 120 }}>
@@ -222,7 +222,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                   formatter={(value, name) => [
                     value.toLocaleString(),
                     name === 'recentEvents' ? 'Recent Events (4 weeks)' :
-                    name === 'totalEvents' ? 'Total Events' :
+                    name === 'totalEvents' ? 'Total Agentic Tasks' :
                     name === 'activeUsers' ? 'Active Users' : name
                   ]}
                   contentStyle={{
@@ -235,7 +235,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 <Legend />
                 <Line type="monotone" dataKey="recentEvents" stroke={COLORS[3]} strokeWidth={3} name="Recent Events (4 weeks)" />
                 <Line type="monotone" dataKey="activeUsers" stroke={COLORS[4]} strokeWidth={3} name="Active Users" />
-                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[5]} strokeWidth={3} name="Total Events" />
+                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[5]} strokeWidth={3} name="Total Agentic Tasks" />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -269,7 +269,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
             <div className="text-2xl font-bold text-orange-600">
               {data.reduce((sum, org) => sum + org.totalEvents, 0).toLocaleString()}
             </div>
-            <div className="text-sm text-orange-800">Total Events</div>
+            <div className="text-sm text-orange-800">Total Agentic Tasks</div>
           </div>
         </div>
 

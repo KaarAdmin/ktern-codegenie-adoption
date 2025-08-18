@@ -339,7 +339,7 @@ export function OrganizationAgGridPivot({
     },
     {
       field: 'totalEvents',
-      headerName: 'CodeGenie Events',
+      headerName: 'Agentic Tasks',
       aggFunc: 'sum',
       enableValue: true,
       filter: 'agNumberColumnFilter',
@@ -351,7 +351,7 @@ export function OrganizationAgGridPivot({
     },
     {
       field: 'eventsLast4Weeks',
-      headerName: 'CodeGenie Events in Last 4 Weeks',
+      headerName: 'Agentic Tasks in Last 4 Weeks',
       aggFunc: 'sum',
       enableValue: true,
       filter: 'agNumberColumnFilter',

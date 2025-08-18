@@ -182,7 +182,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                     name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
                     name === 'cost' ? 'Total Cost ($)' :
                     name === 'users' ? 'Total Users' :
-                    name === 'events' ? 'Total Events' : name
+                    name === 'events' ? 'Total Agentic Tasks' : name
                   ]}
                   contentStyle={{
                     backgroundColor: '#f8fafc',
@@ -193,7 +193,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 />
                 <Legend />
                 <Bar dataKey="cost" fill={COLORS[0]} name="Total Cost ($)" />
-                <Bar dataKey="events" fill={COLORS[1]} name="Total Events" />
+                <Bar dataKey="events" fill={COLORS[1]} name="Total Agentic Tasks" />
                 <Bar dataKey="users" fill={COLORS[2]} name="Total Users" />
               </BarChart>
             ) : (
@@ -216,7 +216,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                   formatter={(value, name) => [
                     value.toLocaleString(),
                     name === 'recentEvents' ? 'Recent Events (4 weeks)' :
-                    name === 'totalEvents' ? 'Total Events' : name
+                    name === 'totalEvents' ? 'Total Agentic Tasks' : name
                   ]}
                   contentStyle={{
                     backgroundColor: '#f8fafc',
@@ -227,7 +227,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 />
                 <Legend />
                 <Line type="monotone" dataKey="recentEvents" stroke={COLORS[9]} strokeWidth={3} name="Recent Events (4 weeks)" />
-                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[10]} strokeWidth={3} name="Total Events" />
+                <Line type="monotone" dataKey="totalEvents" stroke={COLORS[10]} strokeWidth={3} name="Total Agentic Tasks" />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -324,7 +324,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     value.toLocaleString(),
-                    name === 'recentEvents' ? 'Recent Events' : 'Total Events'
+                    name === 'recentEvents' ? 'Recent Events' : 'Total Agentic Tasks'
                   ]}
                   contentStyle={{ fontSize: '11px' }}
                 />

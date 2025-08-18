@@ -83,7 +83,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
         name: user.fullName.length > 12 ? user.fullName.substring(0, 12) + '...' : user.fullName,
         fullName: user.fullName,
         cost: user.totalCost,
-        events: user.totalEvents,
+        tasks: user.totalEvents,
         organization: user.organization,
         project: user.projectName
       }))
@@ -131,27 +131,57 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
     .sort((a, b) => b.totalEvents - a.totalEvents)
     .slice(0, 20)
 
+    // Calculate totals for proper relative scoring
+    const totalEventsAllUsers = data.reduce((sum, user) => sum + user.totalEvents, 0)
+    const totalCostAllUsers = data.reduce((sum, user) => sum + user.totalCost, 0)
+    const totalRecentEventsAllUsers = data.reduce((sum, user) => sum + user.eventsLast4Weeks, 0)
+
     // Performance metrics (radar chart data) - Top 30 users
-    const performanceMetrics = data
+    const topUsers = data
       .filter(user => user.totalEvents > 0)
       .sort((a, b) => b.totalEvents - a.totalEvents)
       .slice(0, 30)
-      .map(user => ({
+
+    // Calculate min/max for scaling within the top users group
+    const maxEvents = Math.max(...topUsers.map(user => user.totalEvents))
+    const maxCost = Math.max(...topUsers.map(user => user.totalCost))
+    const minEvents = Math.min(...topUsers.map(user => user.totalEvents))
+    const minCost = Math.min(...topUsers.map(user => user.totalCost))
+
+    const performanceMetrics = topUsers.map(user => {
+      // Raw percentages for tooltip (absolute percentages of total codegenie)
+      const rawEventScore = totalEventsAllUsers > 0 ? (user.totalEvents / totalEventsAllUsers) * 100 : 0
+      const rawCostScore = totalCostAllUsers > 0 ? (user.totalCost / totalCostAllUsers) * 100 : 0
+      
+      // Scaled scores for radar visualization (relative to top users group)
+      // Scale from 10-100 to ensure visibility and differentiation
+      const eventScore = maxEvents > minEvents 
+        ? 10 + ((user.totalEvents - minEvents) / (maxEvents - minEvents)) * 90
+        : 50 // If all users have same tasks, put them at 50%
+        
+      const costScore = maxCost > minCost 
+        ? 10 + ((user.totalCost - minCost) / (maxCost - minCost)) * 90
+        : 50 // If all users have same cost, put them at 50%
+      
+      return {
         name: user.fullName.length > 8 ? user.fullName.substring(0, 8) + '...' : user.fullName,
         fullName: user.fullName,
-        events: Math.min(user.totalEvents / 10, 100), // Normalize to 0-100 scale
-        cost: Math.min(user.totalCost / 100, 100), // Normalize to 0-100 scale
-        recentActivity: Math.min(user.eventsLast4Weeks * 5, 100), // Normalize to 0-100 scale
-        appsDeployed: Math.min(user.app_deployed_count * 10, 100), // Normalize to 0-100 scale
-        appsGenerated: Math.min(user.app_generated_count * 10, 100), // Normalize to 0-100 scale
+        tasks: Math.round(eventScore), // Scaled for visualization
+        cost: Math.round(costScore), // Scaled for visualization
+        appsDeployed: Math.min(user.app_deployed_count * 10, 100), // Keep existing logic for apps
+        appsGenerated: Math.min(user.app_generated_count * 10, 100), // Keep existing logic for apps
         organization: user.organization,
         project: user.projectName,
         totalEvents: user.totalEvents,
         totalCost: user.totalCost,
         eventsLast4Weeks: user.eventsLast4Weeks,
         app_deployed_count: user.app_deployed_count,
-        app_generated_count: user.app_generated_count
-      }))
+        app_generated_count: user.app_generated_count,
+        // Add raw percentages for tooltip display
+        rawEventScore: rawEventScore,
+        rawCostScore: rawCostScore,
+      }
+    })
 
     return {
       costDistribution,
@@ -210,7 +240,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     name === 'cost' ? `$${value.toLocaleString()}` : value.toLocaleString(),
-                    name === 'cost' ? 'Total Cost ($)' : 'Total Events'
+                    name === 'cost' ? 'Total Cost ($)' : 'Total Agentic Tasks'
                   ]}
                   contentStyle={{
                     backgroundColor: '#f8fafc',
@@ -221,7 +251,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                 />
                 <Legend />
                 <Bar dataKey="cost" fill={COLORS[0]} name="Total Cost ($)" />
-                <Bar dataKey="events" fill={COLORS[1]} name="Total Events" />
+                <Bar dataKey="tasks" fill={COLORS[1]} name="Total Agentic Tasks" />
               </BarChart>
             ) : expandedChart === 'contribution' ? (
               <PieChart>
@@ -260,42 +290,46 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                   label={{ value: 'Performance Score (%)', position: 'insideTopLeft' }}
                 />
                 <Radar
-                  name="Events Score"
-                  dataKey="events"
+                  name="Usage Contribution"
+                  dataKey="tasks"
                   stroke={COLORS[5]}
                   fill={COLORS[5]}
                   fillOpacity={0.3}
                   strokeWidth={2}
                 />
                 <Radar
-                  name="Cost Score"
+                  name="Cost Impact"
                   dataKey="cost"
                   stroke={COLORS[6]}
                   fill={COLORS[6]}
                   fillOpacity={0.3}
                   strokeWidth={2}
                 />
-                <Radar
-                  name="Recent Activity Score"
-                  dataKey="recentActivity"
-                  stroke={COLORS[7]}
-                  fill={COLORS[7]}
-                  fillOpacity={0.3}
-                  strokeWidth={2}
-                />
                 <Legend />
                 <Tooltip
-                  formatter={(value, name) => [
-                    `${typeof value === 'number' ? value.toFixed(1) : value}%`,
-                    name === 'events' ? 'Events Score (%)' :
-                    name === 'cost' ? 'Cost Score (%)' :
-                    name === 'recentActivity' ? 'Recent Activity Score (%)' : name
-                  ]}
-                  contentStyle={{
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '12px'
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-xs">
+                          <p className="font-semibold mb-2">{data.fullName}</p>
+                          <p className="text-gray-600 mb-1">{data.organization} - {data.project}</p>
+                          <div className="space-y-1">
+                            <p className="text-blue-600">
+                              <span className="font-medium">Usage Contribution:</span> {data.rawEventScore.toFixed(2)}%
+                              <br />
+                              <span className="text-gray-500 text-xs">({data.totalEvents.toLocaleString()} of {data.totalEvents > 0 ? Math.round(data.totalEvents / (data.rawEventScore / 100)).toLocaleString() : 0} total agentic tasks)</span>
+                            </p>
+                            <p className="text-orange-600">
+                              <span className="font-medium">Cost Impact:</span> {data.rawCostScore.toFixed(2)}%
+                              <br />
+                              <span className="text-gray-500 text-xs">(${data.totalCost.toLocaleString()} of ${data.totalCost > 0 ? Math.round(data.totalCost / (data.rawCostScore / 100)).toLocaleString() : 0} total agentic cost)</span>
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
               </RadarChart>
@@ -325,7 +359,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
             <div className="text-2xl font-bold text-purple-600">
               {data.reduce((sum, user) => sum + user.totalEvents, 0).toLocaleString()}
             </div>
-            <div className="text-sm text-purple-800">Total Events</div>
+            <div className="text-sm text-purple-800">Total Agentic Tasks</div>
           </div>
           <div className="bg-orange-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-orange-600">
@@ -423,7 +457,7 @@ export function UserCharts({ filters = {} }: UserChartsProps) {
                 <PolarRadiusAxis angle={90} domain={[0, 100]} fontSize={8} />
                 <Radar
                   name="Events"
-                  dataKey="events"
+                  dataKey="tasks"
                   stroke={COLORS[5]}
                   fill={COLORS[5]}
                   fillOpacity={0.3}
