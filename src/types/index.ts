@@ -99,6 +99,7 @@ export interface UserModel {
   status: string;
   totalCost: number;
   totalEvents: number;
+  domain:string;
 }
 
 export interface UserLevelInsightsResponse {

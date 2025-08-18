@@ -325,6 +325,15 @@ export function UserAgGridPivot({
       sortable: true
     },
     {
+      field: 'domain',
+      headerName: 'Domain',
+      rowGroup: true,
+      hide: true,
+      enableRowGroup: true,
+      filter: 'agTextColumnFilter',
+      sortable: true,
+    },
+    {
       field: 'fullName',
       headerName: 'User Name',
       rowGroup: true,
