@@ -47,6 +47,10 @@ export interface OrganizationModel {
   totalUsers: number;
   totalUsersAccepted: number;
   totalUsersInvited: number;
+  globalTotalActiveUser: number;
+  globalTotalUsers: number;
+  globalTotalUsersAccepted: number;
+  globalTotalUsersInvited: number;
 }
 
 
@@ -69,6 +73,10 @@ export interface ProjectModel {
   totalEvents: number;
   totalCost: number;
   eventsLast4Weeks: number;
+  globalTotalActiveUser: number;
+  globalTotalUsers: number;
+  globalTotalUsersAccepted: number;
+  globalTotalUsersInvited: number;
 }
 
 export interface ProjectLevelInsightsResponse {

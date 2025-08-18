@@ -253,7 +253,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
           </div>
           <div className="bg-purple-50 p-4 rounded-lg text-center">
             <div className="text-2xl font-bold text-purple-600">
-              {data.reduce((sum, project) => sum + project.totalUsers, 0).toLocaleString()}
+              {data.reduce((sum, project) => project.globalTotalUsers, 0).toLocaleString()}
             </div>
             <div className="text-sm text-purple-800">Total Users</div>
           </div>
