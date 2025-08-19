@@ -263,6 +263,15 @@ export function ProjectAgGridPivot({
 
   const columnDefs: ColDef[] = useMemo(() => [
     {
+      field: 'projectName',
+      headerName: 'Project Name',
+      rowGroup: true,
+      hide: true,
+      enableRowGroup: true,
+      filter: 'agTextColumnFilter',
+      sortable: true
+    },
+    {
       field: 'organizations',
       headerName: 'Organizations',
       rowGroup: true,
@@ -276,45 +285,6 @@ export function ProjectAgGridPivot({
         }
         return params.value || ''
       }
-    },
-    {
-      field: 'projectName',
-      headerName: 'Project Name',
-      rowGroup: true,
-      hide: true,
-      enableRowGroup: true,
-      filter: 'agTextColumnFilter',
-      sortable: true
-    },
-    {
-      field: 'country',
-      headerName: 'Country',
-      enablePivot: true,
-      aggFunc: 'first',
-      filter: 'agTextColumnFilter',
-      sortable: true,
-      editable: isRowEditable,
-      cellStyle: getCellStyle
-    },
-    {
-      field: 'sbu',
-      headerName: 'SBU',
-      enablePivot: true,
-      aggFunc: 'first',
-      filter: 'agTextColumnFilter',
-      sortable: true,
-      editable: isRowEditable,
-      cellStyle: getCellStyle
-    },
-    {
-      field: 'industry',
-      headerName: 'Industry',
-      enablePivot: true,
-      aggFunc: 'first',
-      filter: 'agTextColumnFilter',
-      sortable: true,
-      editable: isRowEditable,
-      cellStyle: getCellStyle
     },
     {
       field: 'active',
@@ -355,21 +325,150 @@ export function ProjectAgGridPivot({
       cellStyle: getCellStyle
     },
     {
-      field: 'totalCost',
-      headerName: 'Cost',
+      field: 'country',
+      headerName: 'Country',
+      enablePivot: true,
+      aggFunc: 'first',
+      filter: 'agTextColumnFilter',
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
+    },
+    {
+      field: 'sbu',
+      headerName: 'SBU',
+      enablePivot: true,
+      aggFunc: 'first',
+      filter: 'agTextColumnFilter',
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
+    },
+    {
+      field: 'industry',
+      headerName: 'Industry',
+      enablePivot: true,
+      aggFunc: 'first',
+      filter: 'agTextColumnFilter',
+      sortable: true,
+      editable: isRowEditable,
+      cellStyle: getCellStyle
+    },
+    {
+      field: 'createdOn',
+      headerName: 'Created Date',
+      enableValue: true,
+      aggFunc: 'first',
+      valueFormatter: (params) => {
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+      }
+    }
+    ,
+    {
+      field: 'lastCodeGenieEventOn',
+      headerName: 'Latest CodeGenie Event',
+      enableValue: true,
+      aggFunc: 'first',
+      minWidth: 200,
+      valueFormatter: (params) => {
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+      }
+    },
+    {
+      field: 'totalUsers',
+      headerName: 'Users',
       aggFunc: 'sum',
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
       valueFormatter: (params) => {
         if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        }).format(params.value)
+        return new Intl.NumberFormat('en-US').format(params.value)
       }
+    },
+    {
+      field: 'totalUsersInvited',
+      headerName: 'Users Status Invited',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      minWidth: 130,
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      }
+    },
+    {
+      field: 'totalUsersAccepted',
+      headerName: 'Users Status Accepted',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      minWidth: 140,
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      }
+    },
+    {
+      field: 'totalActiveUser',
+      headerName: 'Active Users',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      }
+    },
+    {
+      field: 'app_deployed_count',
+      headerName: 'Apps Deployed',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      editable: isRowEditable,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseInt(value, 10)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      },
+      cellStyle: getCellStyle
+    },
+    {
+      field: 'app_generated_count',
+      headerName: 'Apps Generated',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      editable: isRowEditable,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseInt(value, 10)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      },
+      cellStyle: getCellStyle
     },
     {
       field: 'totalEvents',
@@ -397,115 +496,20 @@ export function ProjectAgGridPivot({
       }
     },
     {
-      field: 'app_deployed_count',
-      headerName: 'Apps Deployed',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      editable: isRowEditable,
-      cellEditor: 'agTextCellEditor',
-      cellEditorParams: {
-        parseValue: (value: string) => {
-          const numValue = parseInt(value, 10)
-          return isNaN(numValue) || numValue < 0 ? 0 : numValue
-        }
-      },
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      },
-      cellStyle: getCellStyle
-    },
-    {
-      field: 'app_generated_count',
-      headerName: 'Apps Generated',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      editable: isRowEditable,
-      cellEditor: 'agTextCellEditor',
-      cellEditorParams: {
-        parseValue: (value: string) => {
-          const numValue = parseInt(value, 10)
-          return isNaN(numValue) || numValue < 0 ? 0 : numValue
-        }
-      },
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      },
-      cellStyle: getCellStyle
-    },
-    {
-      field: 'totalUsers',
-      headerName: 'Users',
+      field: 'totalCost',
+      headerName: 'Cost',
       aggFunc: 'sum',
       enableValue: true,
       filter: 'agNumberColumnFilter',
       sortable: true,
       valueFormatter: (params) => {
         if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      }
-    },
-    {
-      field: 'totalUsersInvited',
-      headerName: 'Invited Users',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      minWidth: 130,
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      }
-    },
-    {
-      field: 'totalUsersAccepted',
-      headerName: 'Accepted Users',
-      aggFunc: 'sum',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      minWidth: 140,
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      }
-    },
-    {
-      field: 'totalActiveUser',
-      headerName: 'Active Users',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      }
-    },
-    {
-      field: 'createdOn',
-      headerName: 'Created Date',
-      enableValue: true,
-      aggFunc: 'first',
-      valueFormatter: (params) => {
-        if (!params.value) return ''
-        const date = new Date(params.value)
-        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
-      }
-    }
-    ,
-    {
-      field: 'lastCodeGenieEventOn',
-      headerName: 'Latest CodeGenie Event',
-      enableValue: true,
-      aggFunc: 'first',
-      minWidth: 200,
-      valueFormatter: (params) => {
-        if (!params.value) return ''
-        const date = new Date(params.value)
-        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(params.value)
       }
     }
   ], [isRowEditable])

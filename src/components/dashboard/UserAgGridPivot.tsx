@@ -307,8 +307,8 @@ export function UserAgGridPivot({
 
   const columnDefs: ColDef[] = useMemo(() => [
     {
-      field: 'organization',
-      headerName: 'Organization',
+      field: 'fullName',
+      headerName: 'User Name',
       rowGroup: true,
       hide: true,
       enableRowGroup: true,
@@ -325,31 +325,13 @@ export function UserAgGridPivot({
       sortable: true
     },
     {
-      field: 'domain',
-      headerName: 'Domain',
-      rowGroup: true,
-      hide: true,
-      enableRowGroup: true,
-      filter: 'agTextColumnFilter',
-      sortable: true,
-    },
-    {
-      field: 'fullName',
-      headerName: 'User Name',
+      field: 'organization',
+      headerName: 'Organization',
       rowGroup: true,
       hide: true,
       enableRowGroup: true,
       filter: 'agTextColumnFilter',
       sortable: true
-    },
-    {
-      field: 'email',
-      headerName: 'Email',
-      enableRowGroup: true,
-      enablePivot: true,
-      aggFunc: 'first',
-      filter: 'agTextColumnFilter',
-      sortable: true,
     },
     {
       field: 'status',
@@ -398,54 +380,32 @@ export function UserAgGridPivot({
       cellStyle: getCellStyle
     },
     {
-      field: 'totalCost',
-      headerName: 'Cost',
-      aggFunc: 'sum',
+      field: 'lastCodeGenieEventOn',
+      headerName: 'Latest CodeGenie Event',
       enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      cellEditor: 'agTextCellEditor',
-      cellEditorParams: {
-        parseValue: (value: string) => {
-          const numValue = parseFloat(value)
-          return isNaN(numValue) || numValue < 0 ? 0 : numValue
-        }
-      },
+      minWidth: 200,
+      aggFunc: 'first',
       valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
-        }).format(params.value)
-      },
-      cellStyle: getCellStyle
-    },
-    {
-      field: 'totalEvents',
-      headerName: 'Agentic Tasks',
-      aggFunc: 'sum',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
-      sortable: true,
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
+        if (!params.value) return ''
+        const date = new Date(params.value)
+        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
       }
     },
     {
-      field: 'eventsLast4Weeks',
-      headerName: 'Agentic Tasks in Last 4 Weeks',
-      aggFunc: 'sum',
-      enableValue: true,
-      filter: 'agNumberColumnFilter',
+      field: 'domain',
+      headerName: 'Domain',
+      hide: true,
+      enableRowGroup: true,
+      filter: 'agTextColumnFilter',
       sortable: true,
-      minWidth: 280, // Wider for longer header
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(params.value)
-      }
+    },
+    {
+      field: 'email',
+      headerName: 'Email',
+      hide: true,
+      enableRowGroup: true,
+      filter: 'agTextColumnFilter',
+      sortable: true,
     },
     {
       field: 'app_deployed_count',
@@ -490,16 +450,54 @@ export function UserAgGridPivot({
       cellStyle: getCellStyle
     },
     {
-      field: 'lastCodeGenieEventOn',
-      headerName: 'Latest CodeGenie Event',
+      field: 'totalEvents',
+      headerName: 'Agentic Tasks',
+      aggFunc: 'sum',
       enableValue: true,
-      minWidth: 200,
-      aggFunc: 'first',
+      filter: 'agNumberColumnFilter',
+      sortable: true,
       valueFormatter: (params) => {
-        if (!params.value) return ''
-        const date = new Date(params.value)
-        return isNaN(date.getTime()) ? '' : date.toLocaleDateString()
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
       }
+    },
+    {
+      field: 'eventsLast4Weeks',
+      headerName: 'Agentic Tasks in Last 4 Weeks',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      minWidth: 280, // Wider for longer header
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(params.value)
+      }
+    },
+    {
+      field: 'totalCost',
+      headerName: 'Cost',
+      aggFunc: 'sum',
+      enableValue: true,
+      filter: 'agNumberColumnFilter',
+      sortable: true,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseFloat(value)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(params.value)
+      },
+      cellStyle: getCellStyle
     }
   ], [isRowEditable])
 
