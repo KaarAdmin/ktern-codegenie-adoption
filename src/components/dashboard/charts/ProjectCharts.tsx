@@ -113,7 +113,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
           Math.round((project.app_deployed_count / project.app_generated_count) * 100) : 0
       }))
 
-    // Activity timeline (recent events)
+    // Activity timeline (Recent Agent Tasks)
     const activityTimeline = data
       .filter(project => project.eventsLast4Weeks > 0)
       .sort((a, b) => b.eventsLast4Weeks - a.eventsLast4Weeks)
@@ -215,7 +215,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     value.toLocaleString(),
-                    name === 'recentEvents' ? 'Recent Events (4 weeks)' :
+                    name === 'recentEvents' ? 'Recent Agent Tasks (4 weeks)' :
                     name === 'totalEvents' ? 'Total Agentic Tasks' : name
                   ]}
                   contentStyle={{
@@ -226,7 +226,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[9]} strokeWidth={3} name="Recent Events (4 weeks)" />
+                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[9]} strokeWidth={3} name="Recent Agent Tasks (4 weeks)" />
                 <Line type="monotone" dataKey="totalEvents" stroke={COLORS[10]} strokeWidth={3} name="Total Agentic Tasks" />
               </LineChart>
             )}
@@ -324,7 +324,7 @@ export function ProjectCharts({ filters = {} }: ProjectChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     value.toLocaleString(),
-                    name === 'recentEvents' ? 'Recent Events' : 'Total Agentic Tasks'
+                    name === 'recentEvents' ? 'Recent Agent Tasks' : 'Total Agentic Tasks'
                   ]}
                   contentStyle={{ fontSize: '11px' }}
                 />

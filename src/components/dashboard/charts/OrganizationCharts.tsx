@@ -221,7 +221,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     value.toLocaleString(),
-                    name === 'recentEvents' ? 'Recent Events (4 weeks)' :
+                    name === 'recentEvents' ? 'Recent Agent Tasks (4 weeks)' :
                     name === 'totalEvents' ? 'Total Agentic Tasks' :
                     name === 'activeUsers' ? 'Active Users' : name
                   ]}
@@ -233,7 +233,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                   }}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[3]} strokeWidth={3} name="Recent Events (4 weeks)" />
+                <Line type="monotone" dataKey="recentEvents" stroke={COLORS[3]} strokeWidth={3} name="Recent Agent Tasks (4 weeks)" />
                 <Line type="monotone" dataKey="activeUsers" stroke={COLORS[4]} strokeWidth={3} name="Active Users" />
                 <Line type="monotone" dataKey="totalEvents" stroke={COLORS[5]} strokeWidth={3} name="Total Agentic Tasks" />
               </LineChart>
@@ -332,7 +332,7 @@ export function OrganizationCharts({ filters = {} }: OrganizationChartsProps) {
                 <Tooltip
                   formatter={(value, name) => [
                     value.toLocaleString(),
-                    name === 'recentEvents' ? 'Recent Events' : 'Active Users'
+                    name === 'recentEvents' ? 'Recent Agent Tasks' : 'Active Users'
                   ]}
                   contentStyle={{ fontSize: '11px' }}
                 />
