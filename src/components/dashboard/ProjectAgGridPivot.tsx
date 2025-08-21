@@ -503,12 +503,12 @@ export function ProjectAgGridPivot({
       filter: 'agNumberColumnFilter',
       sortable: true,
       valueFormatter: (params) => {
-        if (params.value == null) return '0'
+        if (params.value == null) return '$0.00'
         return new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD',
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 3
         }).format(params.value)
       }
     }
