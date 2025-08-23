@@ -844,7 +844,7 @@ export function UserExtendedInsights({
   }), [])
 
   const autoGroupColumnDef = useMemo(() => ({
-    headerName: 'User Extended Details',
+    headerName: 'Executive Overview Details',
     field: 'name',
     minWidth: 350,
     pinned: 'left' as const, // Pin the group column to the left during horizontal scroll
@@ -1122,7 +1122,7 @@ export function UserExtendedInsights({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">User Extended Insights • Total {data.length} records {loading && ' • Loading...'}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Executive Overview Insights • Total {data.length} records {loading && ' • Loading...'}</h2>
         </div>
         
         {/* Search and Controls */}

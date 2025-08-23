@@ -23,7 +23,7 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
   const tabs = [
     {
       id: 'userExtended' as const,
-      label: 'User Extended',
+      label: 'Executive Overview',
       icon: Grid3X3,
       description: 'Extended user insights with detailed analytics'
     },

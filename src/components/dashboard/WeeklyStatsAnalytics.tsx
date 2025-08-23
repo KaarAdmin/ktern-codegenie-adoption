@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { UserExtendedModel } from '@/types'
@@ -76,6 +76,64 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const [showOrgDropdown, setShowOrgDropdown] = useState<boolean>(false)
   const [showProjectDropdown, setShowProjectDropdown] = useState<boolean>(false)
   const [showEmailDropdown, setShowEmailDropdown] = useState<boolean>(false)
+
+  // Debounced search terms for better performance
+  const [debouncedOrgSearch, setDebouncedOrgSearch] = useState<string>('')
+  const [debouncedProjectSearch, setDebouncedProjectSearch] = useState<string>('')
+  const [debouncedEmailSearch, setDebouncedEmailSearch] = useState<string>('')
+
+  // Debounce search terms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedOrgSearch(orgSearchTerm), 300)
+    return () => clearTimeout(timer)
+  }, [orgSearchTerm])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedProjectSearch(projectSearchTerm), 300)
+    return () => clearTimeout(timer)
+  }, [projectSearchTerm])
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedEmailSearch(emailSearchTerm), 300)
+    return () => clearTimeout(timer)
+  }, [emailSearchTerm])
+
+  // Optimized event handlers
+  const handleOrgSelection = useCallback((org: string) => {
+    setSelectedOrganization(org)
+    setSelectedProject('all')
+    setSelectedEmail('all')
+    setShowOrgDropdown(false)
+    setOrgSearchTerm('')
+  }, [])
+
+  const handleProjectSelection = useCallback((project: string) => {
+    setSelectedProject(project)
+    setSelectedEmail('all')
+    setShowProjectDropdown(false)
+    setProjectSearchTerm('')
+  }, [])
+
+  const handleEmailSelection = useCallback((email: string) => {
+    setSelectedEmail(email)
+    setShowEmailDropdown(false)
+    setEmailSearchTerm('')
+  }, [])
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (!target.closest('.dropdown-container')) {
+        setShowOrgDropdown(false)
+        setShowProjectDropdown(false)
+        setShowEmailDropdown(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Process data into time series format
   const timeSeriesData = useMemo((): TimeSeriesData[] => {
@@ -303,7 +361,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       .slice(dataLimit > 0 ? -dataLimit : 0) // Take last N periods, or all if dataLimit is 0
   }, [data, selectedOrganization, selectedProject, selectedEmail, timePeriod, dataLimit])
 
-  // Get unique organizations, projects, and emails for filters
+  // Get unique organizations, projects, and emails for filters - optimized with caching
   const organizations = useMemo(() => {
     const orgs = Array.from(new Set(data.map(item => item.domain))).sort()
     return orgs
@@ -329,23 +387,29 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     return emailList
   }, [data, selectedOrganization, selectedProject])
 
-  // Filtered options for searchable dropdowns
+  // Optimized filtered options with debounced search and limited results
   const filteredOrganizations = useMemo(() => {
-    return organizations.filter(org => 
-      org && typeof org === 'string' && org.toLowerCase().includes(orgSearchTerm.toLowerCase())
-    )
+    if (!orgSearchTerm) return organizations.slice(0, 50) // Limit initial results
+    const searchLower = orgSearchTerm.toLowerCase()
+    return organizations
+      .filter(org => org && typeof org === 'string' && org.toLowerCase().includes(searchLower))
+      .slice(0, 15) // Limit search results
   }, [organizations, orgSearchTerm])
 
   const filteredProjects = useMemo(() => {
-    return projects.filter(project => 
-      project && typeof project === 'string' && project.toLowerCase().includes(projectSearchTerm.toLowerCase())
-    )
+    if (!projectSearchTerm) return projects.slice(0, 50) // Limit initial results
+    const searchLower = projectSearchTerm.toLowerCase()
+    return projects
+      .filter(project => project && typeof project === 'string' && project.toLowerCase().includes(searchLower))
+      .slice(0, 15) // Limit search results
   }, [projects, projectSearchTerm])
 
   const filteredEmails = useMemo(() => {
-    return emails.filter(email => 
-      email && typeof email === 'string' && email.toLowerCase().includes(emailSearchTerm.toLowerCase())
-    )
+    if (!emailSearchTerm) return emails.slice(0, 50) // Limit initial results
+    const searchLower = emailSearchTerm.toLowerCase()
+    return emails
+      .filter(email => email && typeof email === 'string' && email.toLowerCase().includes(searchLower))
+      .slice(0, 15) // Limit search results
   }, [emails, emailSearchTerm])
 
   // Prepare chart data based on active view
@@ -444,35 +508,35 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const viewOptions = [
     {
       id: 'activeUsers' as const,
-      label: 'Active Users',
+      label: 'User',
       icon: Users,
       description: getViewDescription('activeUsers'),
       color: 'text-blue-600'
     },
     {
       id: 'activeBuildspaces' as const,
-      label: 'Active Buildspaces',
+      label: 'Buildspace',
       icon: Layers,
       description: getViewDescription('activeBuildspaces'),
       color: 'text-purple-600'
     },
     {
       id: 'prompts' as const,
-      label: 'Prompts Analysis',
+      label: 'Prompt',
       icon: MessageSquare,
       description: getViewDescription('prompts'),
       color: 'text-green-600'
     },
     {
       id: 'cost' as const,
-      label: 'Cost Analysis',
+      label: 'Cost',
       icon: DollarSign,
       description: getViewDescription('cost'),
       color: 'text-red-600'
     },
     {
       id: 'agenticTasks' as const,
-      label: 'Agentic Task Analysis',
+      label: 'Agentic Task',
       icon: Activity,
       description: getViewDescription('agenticTasks'),
       color: 'text-indigo-600'
@@ -729,412 +793,304 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject])
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Header */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <Activity className="h-6 w-6 mr-2 text-blue-600" />
-              {getPeriodLabel()} Statistics Analytics
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Analyze {timePeriod === 'all' ? 'complete time range' : timePeriod} trends across users, projects, and organizations
-            </p>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          {/* Organization Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center text-sm font-medium text-gray-700">
-              <Building2 className="h-4 w-4 mr-2 text-blue-600" />
-              Organization Filter
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={showOrgDropdown ? orgSearchTerm : (selectedOrganization === 'all' ? '🏢 All Organizations' : `🏢 ${selectedOrganization}`)}
-                onChange={(e) => {
-                  setOrgSearchTerm(e.target.value)
-                  setShowOrgDropdown(true)
-                }}
-                onFocus={() => {
-                  setShowOrgDropdown(true)
-                  setOrgSearchTerm('')
-                }}
-                placeholder="Search organizations..."
-                className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 cursor-pointer"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-              {showOrgDropdown && (
-                <div 
-                  className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <div
-                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm font-medium"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setSelectedOrganization('all')
-                      setSelectedProject('all')
-                      setSelectedEmail('all')
-                      setShowOrgDropdown(false)
-                      setOrgSearchTerm('')
-                    }}
-                  >
-                    🏢 All Organizations
-                  </div>
-                  {filteredOrganizations.map((org, index) => (
-                    <div
-                      key={`org-${org}-${index}`}
-                      className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm font-medium"
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        setSelectedOrganization(org)
-                        setSelectedProject('all')
-                        setSelectedEmail('all')
-                        setShowOrgDropdown(false)
-                        setOrgSearchTerm('')
-                      }}
-                    >
-                      🏢 {org}
-                    </div>
-                  ))}
-                  {filteredOrganizations.length === 0 && orgSearchTerm && (
-                    <div className="px-4 py-2 text-sm text-gray-500">No organizations found</div>
-                  )}
-                </div>
-              )}
+    <div className={`space-y-3 ${className}`}>
+      {/* Improved Compact Header */}
+      <Card className="p-3">
+        {/* Title and Filters */}
+        <div className="flex flex-col space-y-3">
+          {/* Header Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-5 w-5 text-blue-600" />
+              <h2 className="text-base font-semibold text-gray-900">{getPeriodLabel()} Statistics Analytics</h2>
+              <span className="text-sm text-gray-500">Analyze daily trends across users, projects, and organizations</span>
             </div>
-            <p className="text-xs text-gray-500">
-              {selectedOrganization === 'all' ? `${organizations.length} organizations available` : `Selected: ${selectedOrganization}`}
-            </p>
           </div>
           
-          {/* Project Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center text-sm font-medium text-gray-700">
-              <FolderOpen className="h-4 w-4 mr-2 text-green-600" />
-              Project Filter
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={showProjectDropdown ? projectSearchTerm : (selectedProject === 'all' ? '📁 All Projects' : `📁 ${selectedProject}`)}
-                onChange={(e) => {
-                  setProjectSearchTerm(e.target.value)
-                  setShowProjectDropdown(true)
-                }}
-                onFocus={() => {
-                  setShowProjectDropdown(true)
-                  setProjectSearchTerm('')
-                }}
-                placeholder="Search projects..."
-                className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 cursor-pointer"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-              {showProjectDropdown && (
-                <div 
-                  className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <div
-                    className="px-4 py-2 hover:bg-green-50 cursor-pointer text-sm font-medium"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setSelectedProject('all')
-                      setSelectedEmail('all')
-                      setShowProjectDropdown(false)
-                      setProjectSearchTerm('')
-                    }}
-                  >
-                    📁 All Projects
-                  </div>
-                  {filteredProjects.map((project, index) => (
-                    <div
-                      key={`project-${project}-${index}`}
-                      className="px-4 py-2 hover:bg-green-50 cursor-pointer text-sm font-medium"
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        setSelectedProject(project)
-                        setSelectedEmail('all')
-                        setShowProjectDropdown(false)
-                        setProjectSearchTerm('')
-                      }}
-                    >
-                      📁 {project}
+          {/* Filters Row */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Organization Filter */}
+            <div className="flex items-center space-x-2">
+              <Building2 className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-gray-700">Organization</span>
+              <div className="relative dropdown-container">
+                <input
+                  type="text"
+                  value={showOrgDropdown ? orgSearchTerm : (selectedOrganization === 'all' ? 'All Organizations' : selectedOrganization)}
+                  onChange={(e) => {
+                    setOrgSearchTerm(e.target.value)
+                    setShowOrgDropdown(true)
+                  }}
+                  onFocus={() => {
+                    setShowOrgDropdown(true)
+                    setOrgSearchTerm('')
+                  }}
+                  placeholder="Search organizations..."
+                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+                />
+                {showOrgDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    <div className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleOrgSelection('all')}>
+                      <Building2 className="inline h-4 w-4 mr-2 text-blue-600" />
+                      All Organizations
+                      <span className="text-xs text-gray-500 ml-2">({organizations.length} available)</span>
                     </div>
-                  ))}
-                  {filteredProjects.length === 0 && projectSearchTerm && (
-                    <div className="px-4 py-2 text-sm text-gray-500">No projects found</div>
-                  )}
-                </div>
-              )}
+                    {filteredOrganizations.map((org, index) => (
+                      <div key={`org-${org}-${index}`} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm" onClick={() => handleOrgSelection(org)}>
+                        <Building2 className="inline h-4 w-4 mr-2 text-blue-600" />
+                        {org}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-gray-500">
-              {selectedProject === 'all' ? `${projects.length} projects available` : `Selected: ${selectedProject}`}
-            </p>
-          </div>
+            
+            {/* Project Filter */}
+            <div className="flex items-center space-x-2">
+              <FolderOpen className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium text-gray-700">Project</span>
+              <div className="relative dropdown-container">
+                <input
+                  type="text"
+                  value={showProjectDropdown ? projectSearchTerm : (selectedProject === 'all' ? 'All Projects' : selectedProject)}
+                  onChange={(e) => {
+                    setProjectSearchTerm(e.target.value)
+                    setShowProjectDropdown(true)
+                  }}
+                  onFocus={() => {
+                    setShowProjectDropdown(true)
+                    setProjectSearchTerm('')
+                  }}
+                  placeholder="Search projects..."
+                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
+                />
+                {showProjectDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    <div className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleProjectSelection('all')}>
+                      <FolderOpen className="inline h-4 w-4 mr-2 text-green-600" />
+                      All Projects
+                      <span className="text-xs text-gray-500 ml-2">({projects.length} available)</span>
+                    </div>
+                    {filteredProjects.map((project, index) => (
+                      <div key={`project-${project}-${index}`} className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm" onClick={() => handleProjectSelection(project)}>
+                        <FolderOpen className="inline h-4 w-4 mr-2 text-green-600" />
+                        {project}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-          {/* Email Filter */}
-          <div className="space-y-2">
-            <label className="flex items-center text-sm font-medium text-gray-700">
-              <Users className="h-4 w-4 mr-2 text-orange-600" />
-              Email Filter
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={showEmailDropdown ? emailSearchTerm : (selectedEmail === 'all' ? '👤 All Users' : `👤 ${selectedEmail}`)}
-                onChange={(e) => {
-                  setEmailSearchTerm(e.target.value)
-                  setShowEmailDropdown(true)
-                }}
-                onFocus={() => {
-                  setShowEmailDropdown(true)
-                  setEmailSearchTerm('')
-                }}
-                placeholder="Search emails..."
-                className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 cursor-pointer"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-              {showEmailDropdown && (
-                <div 
-                  className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <div
-                    className="px-4 py-2 hover:bg-orange-50 cursor-pointer text-sm font-medium"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setSelectedEmail('all')
-                      setShowEmailDropdown(false)
-                      setEmailSearchTerm('')
-                    }}
-                  >
-                    👤 All Users
-                  </div>
-                  {filteredEmails.map((email, index) => (
-                    <div
-                      key={`email-${email}-${index}`}
-                      className="px-4 py-2 hover:bg-orange-50 cursor-pointer text-sm font-medium"
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        setSelectedEmail(email)
-                        setShowEmailDropdown(false)
-                        setEmailSearchTerm('')
-                      }}
-                    >
-                      👤 {email}
+            {/* Email Filter */}
+            <div className="flex items-center space-x-2">
+              <Users className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-medium text-gray-700">Email</span>
+              <div className="relative dropdown-container">
+                <input
+                  type="text"
+                  value={showEmailDropdown ? emailSearchTerm : (selectedEmail === 'all' ? 'All Users' : selectedEmail)}
+                  onChange={(e) => {
+                    setEmailSearchTerm(e.target.value)
+                    setShowEmailDropdown(true)
+                  }}
+                  onFocus={() => {
+                    setShowEmailDropdown(true)
+                    setEmailSearchTerm('')
+                  }}
+                  placeholder="Search users..."
+                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
+                />
+                {showEmailDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    <div className="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleEmailSelection('all')}>
+                      <Users className="inline h-4 w-4 mr-2 text-orange-600" />
+                      All Users
+                      <span className="text-xs text-gray-500 ml-2">({emails.length} available)</span>
                     </div>
-                  ))}
-                  {filteredEmails.length === 0 && emailSearchTerm && (
-                    <div className="px-4 py-2 text-sm text-gray-500">No emails found</div>
-                  )}
-                </div>
-              )}
+                    {filteredEmails.map((email, index) => (
+                      <div key={`email-${email}-${index}`} className="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm" onClick={() => handleEmailSelection(email)}>
+                        <Users className="inline h-4 w-4 mr-2 text-orange-600" />
+                        {email}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-gray-500">
-              {selectedEmail === 'all' ? `${emails.length} users available` : `Selected: ${selectedEmail}`}
-            </p>
-          </div>
-          
-          <div className="space-y-2">
-            <label className="flex items-center text-sm font-medium text-gray-700">
-              <Calendar className="h-4 w-4 mr-2 text-purple-600" />
-              Show Last N Periods
-            </label>
-            <div className="relative">
+            
+            {/* Periods Filter */}
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-purple-600" />
+              <span className="text-sm font-medium text-gray-700">Last N Periods</span>
               <select
                 value={dataLimit}
                 onChange={(e) => setDataLimit(Number(e.target.value))}
-                className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 appearance-none cursor-pointer"
+                className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
               >
-                <option value={10} className="font-medium">📊 Last 10</option>
-                <option value={25} className="font-medium">📊 Last 25</option>
-                <option value={50} className="font-medium">📊 Last 50</option>
-                <option value={100} className="font-medium">📊 Last 100</option>
-                <option value={0} className="font-medium">📊 All Data</option>
+                <option value={10}>Last 10</option>
+                <option value={25}>Last 25</option>
+                <option value={50}>Last 50</option>
+                <option value={0}>All Periods</option>
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
             </div>
-            <p className="text-xs text-gray-500">
-              {dataLimit === 0 ? 'Showing all available data' : `Showing last ${dataLimit} periods`}
-            </p>
           </div>
         </div>
 
-        {/* Summary Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-blue-600">{summaryStats.totalPeriods}</div>
+        {/* Summary Stats Grid */}
+        <div className="mt-4 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+          <div className="bg-blue-50 p-2 rounded text-center border border-blue-100">
+            <div className="text-base font-bold text-blue-600">{summaryStats.totalPeriods}</div>
             <div className="text-xs text-blue-800">Total Periods</div>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-green-600">{summaryStats.uniqueActiveUsers}</div>
+          <div className="bg-green-50 p-2 rounded text-center border border-green-100">
+            <div className="text-base font-bold text-green-600">{summaryStats.uniqueActiveUsers}</div>
             <div className="text-xs text-green-800">Unique Users</div>
           </div>
-          <div className="bg-purple-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-purple-600">{summaryStats.uniqueActiveBuildspaces}</div>
+          <div className="bg-purple-50 p-2 rounded text-center border border-purple-100">
+            <div className="text-base font-bold text-purple-600">{summaryStats.uniqueActiveBuildspaces}</div>
             <div className="text-xs text-purple-800">Unique Buildspaces</div>
           </div>
-          <div className="bg-orange-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-orange-600">{summaryStats.totalPrompts.toLocaleString()}</div>
+          <div className="bg-orange-50 p-2 rounded text-center border border-orange-100">
+            <div className="text-base font-bold text-orange-600">{summaryStats.totalPrompts.toLocaleString()}</div>
             <div className="text-xs text-orange-800">Total Prompts</div>
           </div>
-          <div className="bg-red-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-red-600">${summaryStats.totalCost.toFixed(2)}</div>
+          <div className="bg-red-50 p-2 rounded text-center border border-red-100">
+            <div className="text-base font-bold text-red-600">${summaryStats.totalCost.toFixed(2)}</div>
             <div className="text-xs text-red-800">Total Cost</div>
           </div>
-          <div className="bg-indigo-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-indigo-600">{summaryStats.totalAgenticTasks}</div>
+          <div className="bg-indigo-50 p-2 rounded text-center border border-indigo-100">
+            <div className="text-base font-bold text-indigo-600">{summaryStats.totalAgenticTasks}</div>
             <div className="text-xs text-indigo-800">Agentic Tasks</div>
           </div>
         </div>
 
-        {/* Period Averages */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-          <div className="bg-slate-50 p-4 rounded-lg text-center">
-            <div className="text-xs font-bold text-slate-600">{summaryStats.peakPeriod}</div>
+        {/* Average Stats Grid */}
+        <div className="mt-2 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+          <div className="bg-slate-50 p-1.5 rounded text-center border border-slate-100">
+            <div className="text-xs font-semibold text-slate-600">{summaryStats.peakPeriod.slice(0, 12)}...</div>
             <div className="text-xs text-slate-800">Peak Period</div>
           </div>
-          <div className="bg-teal-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-teal-600">{summaryStats.avgActiveUsers}</div>
+          <div className="bg-teal-50 p-1.5 rounded text-center border border-teal-100">
+            <div className="text-xs font-semibold text-teal-600">{summaryStats.avgActiveUsers}</div>
             <div className="text-xs text-teal-800">Avg Users</div>
           </div>
-          <div className="bg-violet-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-violet-600">{summaryStats.avgActiveBuildspaces}</div>
+          <div className="bg-violet-50 p-1.5 rounded text-center border border-violet-100">
+            <div className="text-xs font-semibold text-violet-600">{summaryStats.avgActiveBuildspaces}</div>
             <div className="text-xs text-violet-800">Avg Buildspaces</div>
           </div>
-          <div className="bg-amber-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-amber-600">{summaryStats.avgPeriodPrompts.toLocaleString()}</div>
+          <div className="bg-amber-50 p-1.5 rounded text-center border border-amber-100">
+            <div className="text-xs font-semibold text-amber-600">{summaryStats.avgPeriodPrompts.toLocaleString()}</div>
             <div className="text-xs text-amber-800">Avg Prompts</div>
           </div>
-          <div className="bg-rose-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-rose-600">${summaryStats.avgPeriodCost.toFixed(2)}</div>
+          <div className="bg-rose-50 p-1.5 rounded text-center border border-rose-100">
+            <div className="text-xs font-semibold text-rose-600">${summaryStats.avgPeriodCost.toFixed(2)}</div>
             <div className="text-xs text-rose-800">Avg Cost</div>
           </div>
-          <div className="bg-cyan-50 p-4 rounded-lg text-center">
-            <div className="text-lg font-bold text-cyan-600">{summaryStats.avgAgenticTasks}</div>
-            <div className="text-xs text-cyan-800">Avg Agentic Tasks</div>
-          </div>
-        </div>
-
-        {/* Time Period Selector */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Time Period
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {timePeriodOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => setTimePeriod(option.id)}
-                className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  timePeriod === option.id
-                    ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-300'
-                    : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                }`}
-                title={option.description}
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* View Toggle Buttons */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {viewOptions.map((option) => {
-            const Icon = option.icon
-            return (
-              <button
-                key={option.id}
-                onClick={() => setActiveView(option.id)}
-                className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeView === option.id
-                    ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                    : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
-                }`}
-              >
-                <Icon className={`h-4 w-4 mr-2 ${option.color}`} />
-                {option.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Chart Type Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex gap-2">
-            {chartTypeOptions.map((option) => {
-              const Icon = option.icon
-              return (
-                <button
-                  key={option.id}
-                  onClick={() => setChartType(option.id)}
-                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    chartType === option.id
-                      ? 'bg-purple-100 text-purple-700 border border-purple-300'
-                      : 'bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200'
-                  }`}
-                >
-                  <Icon className="h-4 w-4 mr-1" />
-                  {option.label}
-                </button>
-              )
-            })}
-          </div>
-          
-          {/* View Description */}
-          <div className="bg-blue-100 border border-blue-200 rounded-lg p-2 flex-1 sm:max-w-lg">
-            <p className="text-sm text-blue-800">
-              <span className="font-semibold text-blue-900">
-                {viewOptions.find(v => v.id === activeView)?.label}:
-              </span>
-              <span className="ml-2">
-                {viewOptions.find(v => v.id === activeView)?.description}
-              </span>
-            </p>
+          <div className="bg-cyan-50 p-1.5 rounded text-center border border-cyan-100">
+            <div className="text-xs font-semibold text-cyan-600">{summaryStats.avgAgenticTasks}</div>
+            <div className="text-xs text-cyan-800">Avg Tasks</div>
           </div>
         </div>
       </Card>
 
-      {/* Chart */}
-      <Card className="p-6">
+      {/* Controls and Chart */}
+      <Card className="p-4">
+        {/* Control Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-gray-200">
+          {/* Time Period Controls */}
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">Time Period:</span>
+            <div className="flex space-x-1">
+              {timePeriodOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setTimePeriod(option.id)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    timePeriod === option.id
+                      ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {/* Analysis Type Controls */}
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">Analysis Type:</span>
+            <div className="flex space-x-1">
+              {viewOptions.map((option) => {
+                const Icon = option.icon
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => setActiveView(option.id)}
+                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      activeView === option.id
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 mr-1.5" />
+                    {option.label.split(' ')[0]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          
+          {/* Chart Type Controls */}
+          <div className="flex items-center space-x-3">
+            <span className="text-sm font-medium text-gray-700">Chart Type:</span>
+            <div className="flex space-x-1">
+              {chartTypeOptions.map((option) => {
+                const Icon = option.icon
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => setChartType(option.id)}
+                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      chartType === option.id
+                        ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 mr-1.5" />
+                    {option.label.split(' ')[0]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Chart Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">
             {viewOptions.find(v => v.id === activeView)?.label} - {getPeriodLabel()} Trend
           </h3>
-          <div className="text-sm text-gray-500">
-            {timeSeriesData.length} periods of data
-            {dataLimit > 0 && (
-              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">
-                Showing last {dataLimit}
+          <div className="flex items-center space-x-3">
+            <div className="text-sm text-gray-500">
+              {timeSeriesData.length} periods
+              {dataLimit > 0 && (
+                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium">
+                  Last {dataLimit}
+                </span>
+              )}
+            </div>
+            <div className="bg-blue-50 px-3 py-2 rounded-md border border-blue-100">
+              <span className="text-sm font-medium text-blue-800">
+                {viewOptions.find(v => v.id === activeView)?.description}
               </span>
-            )}
+            </div>
           </div>
         </div>
         
+        {/* Chart Content */}
         {timeSeriesData.length > 0 ? (
           <div className="w-full">
             {renderChart()}
@@ -1143,8 +1099,8 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
           <div className="flex items-center justify-center h-64 text-gray-500">
             <div className="text-center">
               <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>No data available for the selected filters</p>
-              <p className="text-sm">Try adjusting your organization or project filters</p>
+              <p className="text-lg font-medium">No data available for the selected filters</p>
+              <p className="text-sm mt-2">Try adjusting your organization, project, or time period filters</p>
             </div>
           </div>
         )}
