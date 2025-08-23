@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card'
 import { isAuthorizedUser, getCurrentUserEmail } from '@/lib/auth'
 import { useToastActions } from '@/contexts/ToastContext'
 import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare } from 'lucide-react'
+import { WeeklyStatsAnalytics } from './WeeklyStatsAnalytics'
 import 'ag-grid-enterprise'
 
 interface UserExtendedInsightsProps {
@@ -882,6 +883,9 @@ export function UserExtendedInsights({
         </div>
       </Card>
 
+      {/* Weekly Statistics Analytics */}
+      <WeeklyStatsAnalytics data={data} />
+
       {/* Top 5 Tables - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top 5 Organizations Table */}
@@ -913,7 +917,7 @@ export function UserExtendedInsights({
               <tbody className="bg-white divide-y divide-gray-200">
                 {topOrganizations.length > 0 ? (
                   topOrganizations.map((org, index) => (
-                    <tr key={org.domainName} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={`org-${org.domainName}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-4 py-3 text-sm text-gray-900 font-medium">
                         {org.orgName}
                       </td>
@@ -974,7 +978,7 @@ export function UserExtendedInsights({
               <tbody className="bg-white divide-y divide-gray-200">
                 {topUsers.length > 0 ? (
                   topUsers.map((user, index) => (
-                    <tr key={user.userName} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr key={`user-${user.userName}-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       <td className="px-4 py-3 text-sm text-gray-900 font-medium">
                         {user.userName}
                       </td>
