@@ -76,6 +76,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const [showOrgDropdown, setShowOrgDropdown] = useState<boolean>(false)
   const [showProjectDropdown, setShowProjectDropdown] = useState<boolean>(false)
   const [showEmailDropdown, setShowEmailDropdown] = useState<boolean>(false)
+  const [showPeriodsDropdown, setShowPeriodsDropdown] = useState<boolean>(false)
 
   // Debounced search terms for better performance
   const [debouncedOrgSearch, setDebouncedOrgSearch] = useState<string>('')
@@ -120,6 +121,11 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     setEmailSearchTerm('')
   }, [])
 
+  const handlePeriodsSelection = useCallback((periods: number) => {
+    setDataLimit(periods)
+    setShowPeriodsDropdown(false)
+  }, [])
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -128,6 +134,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         setShowOrgDropdown(false)
         setShowProjectDropdown(false)
         setShowEmailDropdown(false)
+        setShowPeriodsDropdown(false)
       }
     }
 
@@ -759,7 +766,14 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     const avgActiveBuildspaces = totalPeriods > 0 ? timeSeriesData.reduce((sum, period) => sum + period.activeBuildspaces, 0) / totalPeriods : 0
     const totalPrompts = timeSeriesData.reduce((sum, period) => sum + period.totalPrompts, 0)
     const totalCost = timeSeriesData.reduce((sum, period) => sum + period.totalCost, 0)
-    const totalAgenticTasks = timeSeriesData.reduce((sum, period) => sum + period.totalAgenticTasks, 0)
+    
+    // Calculate unique agentic tasks from the filtered data to avoid double counting
+    const uniqueAgenticTasksInRange = new Set(
+      filteredData
+        .filter(item => item.taskId && item.taskId !== 'N/A')
+        .map(item => item.taskId!)
+    )
+    const totalAgenticTasks = uniqueAgenticTasksInRange.size
     
     // Calculate period averages for prompts, cost, and agentic tasks
     const avgPeriodPrompts = totalPeriods > 0 ? totalPrompts / totalPeriods : 0
@@ -925,19 +939,45 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             {/* Periods Filter */}
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-purple-600" />
-              <span className="text-sm font-medium text-gray-700">Last N Periods</span>
-              <select
-                value={dataLimit}
-                onChange={(e) => setDataLimit(Number(e.target.value))}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-              >
-                <option value={10}>Last 10</option>
-                <option value={25}>Last 25</option>
-                <option value={50}>Last 50</option>
-                <option value={60}>Last 60</option>
-                <option value={90}>Last 90</option>
-                <option value={0}>All Periods</option>
-              </select>
+              <span className="text-sm font-medium text-gray-700">Last N Period</span>
+              <div className="relative dropdown-container">
+                <input
+                  type="text"
+                  value={dataLimit === 0 ? 'All Periods' : `Last ${dataLimit}`}
+                  readOnly
+                  onClick={() => setShowPeriodsDropdown(!showPeriodsDropdown)}
+                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
+                />
+                {showPeriodsDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handlePeriodsSelection(0)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      All Periods
+                      <span className="text-xs text-gray-500 ml-2">(No limit)</span>
+                    </div>
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(10)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      Last 10
+                    </div>
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(25)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      Last 25
+                    </div>
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(50)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      Last 50
+                    </div>
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(60)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      Last 60
+                    </div>
+                    <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(90)}>
+                      <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                      Last 90
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
