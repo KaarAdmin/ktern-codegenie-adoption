@@ -197,7 +197,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         allPeriods = [minDate]
         periodGenerator = (start) => minDate
         periodEnd = (start) => maxDate
-        formatPeriod = (start, end) => 'All Time (' + format(start, 'MMM yyyy') + ' - ' + format(end, 'MMM yyyy') + ')'
+        formatPeriod = (start, end) => 'All (' + format(start, 'MMM yyyy') + ' - ' + format(end, 'MMM yyyy') + ')'
         break
       default:
         allPeriods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
@@ -562,7 +562,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     { id: 'weekly' as const, label: 'Weekly', description: 'Week-by-week analysis' },
     { id: 'monthly' as const, label: 'Monthly', description: 'Month-by-month analysis' },
     { id: 'yearly' as const, label: 'Yearly', description: 'Year-by-year analysis' },
-    { id: 'all' as const, label: 'All Time', description: 'Complete time range analysis' },
+    { id: 'all' as const, label: 'All', description: 'Complete time range analysis' },
   ]
 
   const getPeriodLabel = () => {
@@ -571,7 +571,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       case 'weekly': return 'Weekly'
       case 'monthly': return 'Monthly'
       case 'yearly': return 'Yearly'
-      case 'all': return 'All Time'
+      case 'all': return 'All'
       default: return 'Daily'
     }
   }
@@ -824,9 +824,9 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
           </div>
           
           {/* Filters Row */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Organization Filter */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-shrink-0">
               <Building2 className="h-4 w-4 text-blue-600" />
               <span className="text-sm font-medium text-gray-700">Organization</span>
               <div className="relative dropdown-container">
@@ -842,7 +842,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                     setOrgSearchTerm('')
                   }}
                   placeholder="Search organizations..."
-                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+                  className="w-56 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
                 />
                 {showOrgDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
@@ -863,7 +863,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             </div>
             
             {/* Project Filter */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-shrink-0">
               <FolderOpen className="h-4 w-4 text-green-600" />
               <span className="text-sm font-medium text-gray-700">Project</span>
               <div className="relative dropdown-container">
@@ -879,7 +879,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                     setProjectSearchTerm('')
                   }}
                   placeholder="Search projects..."
-                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
+                  className="w-56 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
                 />
                 {showProjectDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
@@ -900,7 +900,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             </div>
 
             {/* Email Filter */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-shrink-0">
               <Users className="h-4 w-4 text-orange-600" />
               <span className="text-sm font-medium text-gray-700">Email</span>
               <div className="relative dropdown-container">
@@ -916,7 +916,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                     setEmailSearchTerm('')
                   }}
                   placeholder="Search users..."
-                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
+                  className="w-56 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
                 />
                 {showEmailDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
@@ -937,7 +937,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             </div>
             
             {/* Periods Filter */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-shrink-0">
               <Calendar className="h-4 w-4 text-purple-600" />
               <span className="text-sm font-medium text-gray-700">Last N Period</span>
               <div className="relative dropdown-container">
@@ -946,7 +946,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                   value={dataLimit === 0 ? 'All Periods' : `Last ${dataLimit}`}
                   readOnly
                   onClick={() => setShowPeriodsDropdown(!showPeriodsDropdown)}
-                  className="w-64 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
+                  className="w-56 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
                 />
                 {showPeriodsDropdown && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
@@ -1042,16 +1042,16 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       {/* Controls and Chart */}
       <Card className="p-4">
         {/* Control Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-gray-200">
+        <div className="flex items-center gap-6 mb-4 pb-3 border-b border-gray-200 min-w-0">
           {/* Time Period Controls */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm font-medium text-gray-700">Time Period:</span>
-            <div className="flex space-x-1">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Time Period:</span>
+            <div className="flex gap-1">
               {timePeriodOptions.map((option) => (
                 <button
                   key={option.id}
                   onClick={() => setTimePeriod(option.id)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                     timePeriod === option.id
                       ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
@@ -1064,22 +1064,22 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
           </div>
           
           {/* Analysis Type Controls */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm font-medium text-gray-700">Analysis Type:</span>
-            <div className="flex space-x-1">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Analysis Type:</span>
+            <div className="flex gap-1">
               {viewOptions.map((option) => {
                 const Icon = option.icon
                 return (
                   <button
                     key={option.id}
                     onClick={() => setActiveView(option.id)}
-                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                       activeView === option.id
                         ? 'bg-blue-100 text-blue-700 border border-blue-200'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
                     }`}
                   >
-                    <Icon className="h-4 w-4 mr-1.5" />
+                    <Icon className="h-4 w-4 mr-1" />
                     {option.label.split(' ')[0]}
                   </button>
                 )
@@ -1088,22 +1088,22 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
           </div>
           
           {/* Chart Type Controls */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm font-medium text-gray-700">Chart Type:</span>
-            <div className="flex space-x-1">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Chart Type:</span>
+            <div className="flex gap-1">
               {chartTypeOptions.map((option) => {
                 const Icon = option.icon
                 return (
                   <button
                     key={option.id}
                     onClick={() => setChartType(option.id)}
-                    className={`flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                       chartType === option.id
                         ? 'bg-purple-100 text-purple-700 border border-purple-200'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
                     }`}
                   >
-                    <Icon className="h-4 w-4 mr-1.5" />
+                    <Icon className="h-4 w-4 mr-1" />
                     {option.label.split(' ')[0]}
                   </button>
                 )
