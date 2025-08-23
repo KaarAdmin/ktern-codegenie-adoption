@@ -139,7 +139,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const timeSeriesData = useMemo((): TimeSeriesData[] => {
     if (!data.length) return []
 
-    // Get date range from data
+    // Get date range from ALL data (not filtered by org/project/email)
     const validDates = data
       .map(item => {
         try {
@@ -155,51 +155,54 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     const minDate = new Date(Math.min(...validDates.map(d => d.getTime())))
     const maxDate = new Date(Math.max(...validDates.map(d => d.getTime())))
 
-    // Generate periods based on selected time period
-    let periods: Date[] = []
+    // Generate ALL periods based on selected time period from complete dataset
+    let allPeriods: Date[] = []
     let periodGenerator: (start: Date) => Date
     let periodEnd: (start: Date) => Date
     let formatPeriod: (start: Date, end: Date) => string
 
     switch (timePeriod) {
       case 'daily':
-        periods = eachDayOfInterval({ start: minDate, end: maxDate })
+        allPeriods = eachDayOfInterval({ start: minDate, end: maxDate })
         periodGenerator = (start) => start
         periodEnd = (start) => start
         formatPeriod = (start, end) => format(start, 'MMM dd, yyyy')
         break
       case 'weekly':
-        periods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
+        allPeriods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
         periodGenerator = (start) => start
         periodEnd = (start) => endOfWeek(start, { weekStartsOn: 1 })
         formatPeriod = (start, end) => format(start, 'MMM dd') + ' - ' + format(end, 'MMM dd, yyyy')
         break
       case 'monthly':
-        periods = eachMonthOfInterval({ start: minDate, end: maxDate })
+        allPeriods = eachMonthOfInterval({ start: minDate, end: maxDate })
         periodGenerator = (start) => startOfMonth(start)
         periodEnd = (start) => endOfMonth(start)
         formatPeriod = (start, end) => format(start, 'MMM yyyy')
         break
       case 'yearly':
-        periods = eachYearOfInterval({ start: minDate, end: maxDate })
+        allPeriods = eachYearOfInterval({ start: minDate, end: maxDate })
         periodGenerator = (start) => startOfYear(start)
         periodEnd = (start) => endOfYear(start)
         formatPeriod = (start, end) => format(start, 'yyyy')
         break
       case 'all':
-        periods = [minDate]
+        allPeriods = [minDate]
         periodGenerator = (start) => minDate
         periodEnd = (start) => maxDate
         formatPeriod = (start, end) => 'All Time (' + format(start, 'MMM yyyy') + ' - ' + format(end, 'MMM yyyy') + ')'
         break
       default:
-        periods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
+        allPeriods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
         periodGenerator = (start) => start
         periodEnd = (start) => endOfWeek(start, { weekStartsOn: 1 })
         formatPeriod = (start, end) => format(start, 'MMM dd') + ' - ' + format(end, 'MMM dd, yyyy')
     }
 
-    return periods.map(periodStart => {
+    // Apply "Last N Periods" filter FIRST to get the desired time range
+    const selectedPeriods = dataLimit > 0 ? allPeriods.slice(-dataLimit) : allPeriods
+
+    return selectedPeriods.map(periodStart => {
       const actualPeriodStart = periodGenerator(periodStart)
       const actualPeriodEnd = periodEnd(actualPeriodStart)
       const periodLabel = formatPeriod(actualPeriodStart, actualPeriodEnd)
@@ -357,8 +360,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         buildspaceBreakdown,
         agenticTaskBreakdown
       }
-    }).filter(period => period.activeUsers > 0 || period.activeBuildspaces > 0 || period.totalPrompts > 0 || period.totalCost > 0)
-      .slice(dataLimit > 0 ? -dataLimit : 0) // Take last N periods, or all if dataLimit is 0
+    }) // No need to filter or slice again since we already applied "Last N Periods" filter above
   }, [data, selectedOrganization, selectedProject, selectedEmail, timePeriod, dataLimit])
 
   // Get unique organizations, projects, and emails for filters - optimized with caching
@@ -932,6 +934,8 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                 <option value={10}>Last 10</option>
                 <option value={25}>Last 25</option>
                 <option value={50}>Last 50</option>
+                <option value={60}>Last 60</option>
+                <option value={90}>Last 90</option>
                 <option value={0}>All Periods</option>
               </select>
             </div>
