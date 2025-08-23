@@ -421,43 +421,172 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       .slice(0, 15) // Limit search results
   }, [emails, emailSearchTerm])
 
-  // Prepare chart data based on active view
+  // Prepare chart data based on active view with email mapping
   const chartData = useMemo(() => {
-    switch (activeView) {
-      case 'activeUsers':
-        return timeSeriesData.map(period => ({
-          week: period.period,
-          value: period.activeUsers,
-          label: 'Active Users'
-        }))
-      case 'activeBuildspaces':
-        return timeSeriesData.map(period => ({
-          week: period.period,
-          value: period.activeBuildspaces,
-          label: 'Active Buildspaces'
-        }))
-      case 'prompts':
-        return timeSeriesData.map(period => ({
-          week: period.period,
-          value: period.totalPrompts,
-          label: 'Total Prompts'
-        }))
-      case 'cost':
-        return timeSeriesData.map(period => ({
-          week: period.period,
-          value: period.totalCost,
-          label: 'Total Cost ($)'
-        }))
-      case 'agenticTasks':
-        return timeSeriesData.map(period => ({
-          week: period.period,
-          value: period.totalAgenticTasks,
-          label: 'Agentic Tasks'
-        }))
-      default:
-        return []
-    }
-  }, [timeSeriesData, activeView])
+    return timeSeriesData.map(period => {
+      // Get the date range for this period
+      const periodStart = parseISO(period.periodStart)
+      const periodEnd = parseISO(period.periodEnd)
+      
+      // Filter data for this specific period
+      const periodData = data.filter(item => {
+        try {
+          const itemDate = parseISO(item.date)
+          return isValid(itemDate) && itemDate >= periodStart && itemDate <= periodEnd
+        } catch {
+          return false
+        }
+      }).filter(item => {
+        // Apply current filters
+        const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+        const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+        const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+        return orgMatch && projectMatch && emailMatch
+      })
+
+      // Create email mappings based on analysis type
+      let emailMapping: string[] = []
+      let value = 0
+      let label = ''
+
+      switch (activeView) {
+        case 'activeUsers':
+          // Map emails of users who were active in this period
+          const activeUserEmails = new Set<string>()
+          if (timePeriod === 'daily') {
+            periodData.filter(item => Number(item.usageCount) > 0).forEach(item => {
+              activeUserEmails.add(item.email)
+            })
+          } else {
+            // For weekly/monthly/yearly: users active on ALL days
+            const expectedDays = eachDayOfInterval({ start: periodStart, end: periodEnd })
+            const expectedDayKeys = expectedDays.map(day => format(day, 'yyyy-MM-dd'))
+            
+            const dailyData = periodData.reduce((acc, item) => {
+              const dateKey = item.date || ''
+              if (dateKey && !acc[dateKey]) {
+                acc[dateKey] = []
+              }
+              if (dateKey) {
+                acc[dateKey].push(item)
+              }
+              return acc
+            }, {} as { [date: string]: typeof periodData })
+
+            const activeUsersPerDay = expectedDayKeys.map(dayKey => {
+              const dayData = dailyData[dayKey] || []
+              return new Set(dayData.filter(item => Number(item.usageCount) > 0).map(item => item.email))
+            })
+
+            const allUsersInPeriod = new Set<string>()
+            activeUsersPerDay.forEach(dayUsers => {
+              dayUsers.forEach(user => allUsersInPeriod.add(user))
+            })
+
+            allUsersInPeriod.forEach(user => {
+              const activeDays = activeUsersPerDay.filter(dayUsers => dayUsers.has(user)).length
+              if (activeDays === expectedDayKeys.length) {
+                activeUserEmails.add(user)
+              }
+            })
+          }
+          emailMapping = Array.from(activeUserEmails)
+          value = period.activeUsers
+          label = 'Active Users'
+          break
+
+        case 'activeBuildspaces':
+          // Map emails with unique buildspace IDs
+          const buildspaceEmailMap = new Map<string, Set<string>>()
+          periodData.filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
+            .forEach(item => {
+              if (!buildspaceEmailMap.has(item.buildSpaceId!)) {
+                buildspaceEmailMap.set(item.buildSpaceId!, new Set())
+              }
+              buildspaceEmailMap.get(item.buildSpaceId!)!.add(item.email)
+            })
+          
+          // Get all unique emails associated with buildspaces
+          const buildspaceEmails = new Set<string>()
+          buildspaceEmailMap.forEach(emails => {
+            emails.forEach(email => buildspaceEmails.add(email))
+          })
+          emailMapping = Array.from(buildspaceEmails)
+          value = period.activeBuildspaces
+          label = 'Active Buildspaces'
+          break
+
+        case 'prompts':
+          // Map emails with their usage count sum
+          const promptEmailMap = new Map<string, number>()
+          periodData.forEach(item => {
+            const usageCount = Number(item.usageCount) || 0
+            if (usageCount > 0) {
+              promptEmailMap.set(item.email, (promptEmailMap.get(item.email) || 0) + usageCount)
+            }
+          })
+          
+          // Sort by usage count and get emails
+          emailMapping = Array.from(promptEmailMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([email, count]) => `${email} (${count} prompts)`)
+          value = period.totalPrompts
+          label = 'Total Prompts'
+          break
+
+        case 'cost':
+          // Map emails with their cost sum
+          const costEmailMap = new Map<string, number>()
+          periodData.forEach(item => {
+            const cost = Number(item.cost) || 0
+            if (cost > 0) {
+              costEmailMap.set(item.email, (costEmailMap.get(item.email) || 0) + cost)
+            }
+          })
+          
+          // Sort by cost and get emails
+          emailMapping = Array.from(costEmailMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([email, cost]) => `${email} ($${cost.toFixed(2)})`)
+          value = period.totalCost
+          label = 'Total Cost ($)'
+          break
+
+        case 'agenticTasks':
+          // Map emails with unique task IDs
+          const taskEmailMap = new Map<string, Set<string>>()
+          periodData.filter(item => item.taskId && item.taskId !== 'N/A')
+            .forEach(item => {
+              if (!taskEmailMap.has(item.email)) {
+                taskEmailMap.set(item.email, new Set())
+              }
+              taskEmailMap.get(item.email)!.add(item.taskId!)
+            })
+          
+          // Sort by unique task count and get emails
+          emailMapping = Array.from(taskEmailMap.entries())
+            .sort((a, b) => b[1].size - a[1].size)
+            .map(([email, tasks]) => `${email} (${tasks.size} tasks)`)
+          value = period.totalAgenticTasks
+          label = 'Agentic Tasks'
+          break
+
+        default:
+          emailMapping = []
+          value = 0
+          label = 'Value'
+      }
+
+      return {
+        week: period.period,
+        value,
+        label,
+        emailMapping,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd
+      }
+    })
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail, timePeriod])
 
   // Prepare breakdown data for pie charts
   const breakdownData = useMemo(() => {
@@ -640,12 +769,56 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                   }}
                 />
                 <Tooltip 
-                  formatter={(value: number) => {
-                    if (activeView === 'cost') {
-                      return [`$${value.toFixed(2)}`, chartData[0]?.label || 'Value']
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0) {
+                      const data = payload[0].payload;
+                      const emailMapping = data.emailMapping || [];
+                      
+                      return (
+                        <div 
+                          className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                          style={{ 
+                            pointerEvents: 'none',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                          <div className="text-blue-600 mb-2">
+                            <span className="font-medium">{data.label}:</span> {
+                              activeView === 'cost' 
+                                ? `$${data.value.toFixed(2)}` 
+                                : data.value.toLocaleString()
+                            }
+                          </div>
+                          {emailMapping.length > 0 && (
+                            <div className="text-gray-600">
+                              <div className="font-medium text-gray-700 mb-1">
+                                {activeView === 'activeUsers' ? 'Active Users:' :
+                                 activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
+                                 activeView === 'prompts' ? 'Users by Prompt Count:' :
+                                 activeView === 'cost' ? 'Users by Cost:' :
+                                 'Users by Task Count:'}
+                              </div>
+                              <div className="text-xs space-y-1">
+                                {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                  <div key={index} className="truncate">
+                                    {email}
+                                  </div>
+                                ))}
+                                {emailMapping.length > 8 && (
+                                  <div className="text-gray-500 italic">
+                                    ... and {emailMapping.length - 8} more users
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }
-                    return [value.toLocaleString(), chartData[0]?.label || 'Value']
+                    return null;
                   }}
+                  cursor={false}
                 />
                 <Legend />
                 <Bar 
@@ -689,12 +862,56 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                 }}
               />
               <Tooltip 
-                formatter={(value: number) => {
-                  if (activeView === 'cost') {
-                    return [`$${value.toFixed(2)}`, chartData[0]?.label || 'Value']
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length > 0) {
+                    const data = payload[0].payload;
+                    const emailMapping = data.emailMapping || [];
+                    
+                    return (
+                      <div 
+                        className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                        style={{ 
+                          pointerEvents: 'none',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                        <div className="text-blue-600 mb-2">
+                          <span className="font-medium">{data.label}:</span> {
+                            activeView === 'cost' 
+                              ? `$${data.value.toFixed(2)}` 
+                              : data.value.toLocaleString()
+                          }
+                        </div>
+                        {emailMapping.length > 0 && (
+                          <div className="text-gray-600">
+                            <div className="font-medium text-gray-700 mb-1">
+                              {activeView === 'activeUsers' ? 'Active Users:' :
+                               activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
+                               activeView === 'prompts' ? 'Users by Prompt Count:' :
+                               activeView === 'cost' ? 'Users by Cost:' :
+                               'Users by Task Count:'}
+                            </div>
+                            <div className="text-xs space-y-1">
+                              {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                <div key={index} className="truncate">
+                                  {email}
+                                </div>
+                              ))}
+                              {emailMapping.length > 8 && (
+                                <div className="text-gray-500 italic">
+                                  ... and {emailMapping.length - 8} more users
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
                   }
-                  return [value.toLocaleString(), chartData[0]?.label || 'Value']
+                  return null;
                 }}
+                cursor={false}
               />
               <Legend />
               <Line 
