@@ -27,6 +27,22 @@ interface SummaryStats {
   totalPrompts: number
 }
 
+interface TopOrganization {
+  orgName: string
+  domainName: string
+  noOfUsers: number
+  noOfBuildspaces: number
+  cost: number
+}
+
+interface TopUser {
+  userName: string
+  name: string
+  noOfAgentTask: number
+  noOfBuildspaces: number
+  cost: number
+}
+
 export function UserExtendedInsights({
   filters = {},
   className = ''
@@ -129,6 +145,96 @@ export function UserExtendedInsights({
       totalAgenticCost: uniqueTaskIds.size,
       totalPrompts: totalPrompts
     }
+  }, [data])
+
+  // Calculate Top 5 Organizations
+  const topOrganizations = useMemo((): TopOrganization[] => {
+    if (!data.length) return []
+
+    const orgMap = new Map<string, {
+      domain: string
+      users: Set<string>
+      buildspaces: Set<string>
+      cost: number
+    }>()
+
+    // Aggregate data by domain
+    data.forEach(item => {
+      if (!orgMap.has(item.domain)) {
+        orgMap.set(item.domain, {
+          domain: item.domain,
+          users: new Set(),
+          buildspaces: new Set(),
+          cost: 0
+        })
+      }
+
+      const org = orgMap.get(item.domain)!
+      org.users.add(item.email)
+      if (item.buildSpaceId) {
+        org.buildspaces.add(item.buildSpaceId)
+      }
+      org.cost += Number(item.cost)
+    })
+
+    // Convert to array and sort by cost (descending)
+    return Array.from(orgMap.values())
+      .map(org => ({
+        orgName: org.domain,
+        domainName: org.domain,
+        noOfUsers: org.users.size,
+        noOfBuildspaces: org.buildspaces.size,
+        cost: org.cost
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 5)
+  }, [data])
+
+  // Calculate Top 5 Users
+  const topUsers = useMemo((): TopUser[] => {
+    if (!data.length) return []
+
+    const userMap = new Map<string, {
+      name: string
+      email: string
+      agentTasks: Set<string>
+      buildspaces: Set<string>
+      cost: number
+    }>()
+
+    // Aggregate data by user name
+    data.forEach(item => {
+      if (!userMap.has(item.name)) {
+        userMap.set(item.name, {
+          name: item.name,
+          email: item.email,
+          agentTasks: new Set(),
+          buildspaces: new Set(),
+          cost: 0
+        })
+      }
+
+      const user = userMap.get(item.name)!
+      if (item.taskId) {
+        user.agentTasks.add(item.taskId)
+      }
+      if (item.buildSpaceId) {
+        user.buildspaces.add(item.buildSpaceId)
+      }
+      user.cost += Number(item.cost)
+    })
+
+    // Convert to array and sort by cost (descending)
+    return Array.from(userMap.values())
+      .map(user => ({
+        userName: user.name,
+        name: user.name,
+        noOfAgentTask: user.agentTasks.size,
+        noOfBuildspaces: user.buildspaces.size,
+        cost: user.cost
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 5)
   }, [data])
 
   const onGridReady = useCallback((params: GridReadyEvent) => {
@@ -491,34 +597,37 @@ export function UserExtendedInsights({
       sortable: true,
       minWidth: 130,
       aggFunc: (params) => {
-        // For group rows, sum up the child values; for leaf rows, count unique buildSpaceIds
+        // For group rows, collect unique buildSpaceIds from children; for leaf rows, count unique buildSpaceIds
         if (params.rowNode && params.rowNode.group) {
-          // This is a group row - sum the aggregated values from children
-          let total = 0
-          params.rowNode.childrenAfterGroup?.forEach((childNode: any) => {
-            if (childNode.group) {
-              // Child is also a group, get its aggregated value
-              const childValue = childNode.aggData?.buildSpaceId
-              if (childValue && !isNaN(Number(childValue))) {
-                total += Number(childValue)
-              }
-            } else {
-              // Child is a leaf node, count its buildSpaceId if it exists
-              if (childNode.data?.buildSpaceId && childNode.data.buildSpaceId !== 'N/A') {
-                total += 1
-              }
+          // This is a group row - collect unique buildSpaceIds from all children
+          const uniqueValues = new Set<string>()
+          
+          const collectFromChildren = (node: any) => {
+            if (node.childrenAfterGroup) {
+              node.childrenAfterGroup.forEach((childNode: any) => {
+                if (childNode.group) {
+                  // Child is also a group, recursively collect from it
+                  collectFromChildren(childNode)
+                } else {
+                  // Child is a leaf node, collect its buildSpaceId if it exists
+                  if (childNode.data?.buildSpaceId && childNode.data.buildSpaceId !== 'N/A') {
+                    uniqueValues.add(childNode.data.buildSpaceId)
+                  }
+                }
+              })
             }
-          })
-          return total.toString()
+          }
+          
+          collectFromChildren(params.rowNode)
+          return uniqueValues.size
         } else {
           // This is a leaf aggregation - count unique buildSpaceIds
           const values = params.values.filter(v => v && v !== 'N/A' && v !== null && v !== undefined)
-          if (values.length === 0) return '0'
+          if (values.length === 0) return 0
           const uniqueValues = Array.from(new Set(values))
-          return uniqueValues.length.toString()
+          return uniqueValues.length
         }
-      },
-      valueFormatter: (params) => params.value || 'N/A'
+      }
     },
     {
       field: 'taskId',
@@ -529,31 +638,35 @@ export function UserExtendedInsights({
       filter: 'agTextColumnFilter',
       minWidth: 150,
       aggFunc: (params) => {
-        // For group rows, sum up the child values; for leaf rows, count unique taskIds
+        // For group rows, collect unique taskIds from children; for leaf rows, count unique taskIds
         if (params.rowNode && params.rowNode.group) {
-          // This is a group row - sum the aggregated values from children
-          let total = 0
-          params.rowNode.childrenAfterGroup?.forEach((childNode: any) => {
-            if (childNode.group) {
-              // Child is also a group, get its aggregated value
-              const childValue = childNode.aggData?.taskId
-              if (childValue && !isNaN(Number(childValue))) {
-                total += Number(childValue)
-              }
-            } else {
-              // Child is a leaf node, count its taskId if it exists
-              if (childNode.data?.taskId) {
-                total += 1
-              }
+          // This is a group row - collect unique taskIds from all children
+          const uniqueValues = new Set<string>()
+          
+          const collectFromChildren = (node: any) => {
+            if (node.childrenAfterGroup) {
+              node.childrenAfterGroup.forEach((childNode: any) => {
+                if (childNode.group) {
+                  // Child is also a group, recursively collect from it
+                  collectFromChildren(childNode)
+                } else {
+                  // Child is a leaf node, collect its taskId if it exists
+                  if (childNode.data?.taskId && childNode.data.taskId !== 'N/A') {
+                    uniqueValues.add(childNode.data.taskId)
+                  }
+                }
+              })
             }
-          })
-          return total.toString()
+          }
+          
+          collectFromChildren(params.rowNode)
+          return uniqueValues.size
         } else {
           // This is a leaf aggregation - count unique taskIds
-          const values = params.values.filter(v => v && v !== null && v !== undefined)
-          if (values.length === 0) return '0'
+          const values = params.values.filter(v => v && v !== 'N/A' && v !== null && v !== undefined)
+          if (values.length === 0) return 0
           const uniqueValues = Array.from(new Set(values))
-          return uniqueValues.length.toString()
+          return uniqueValues.length
         }
       }
     },
@@ -768,6 +881,131 @@ export function UserExtendedInsights({
           </div>
         </div>
       </Card>
+
+      {/* Top 5 Tables - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top 5 Organizations Table */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Building2 className="h-5 w-5 mr-2 text-blue-600" />
+              Top 5 Organizations
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Org Name - Domain Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    No. of Users
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    No. of Buildspaces
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Cost
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {topOrganizations.length > 0 ? (
+                  topOrganizations.map((org, index) => (
+                    <tr key={org.domainName} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                        {org.orgName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {org.noOfUsers.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {org.noOfBuildspaces.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 font-medium">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }).format(org.cost)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                      {loading ? 'Loading organizations...' : 'No organization data available'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        {/* Top 5 Users Table */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Users className="h-5 w-5 mr-2 text-green-600" />
+              Top 5 Users
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    No. of Agent Task
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    No. of Buildspaces
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Cost
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {topUsers.length > 0 ? (
+                  topUsers.map((user, index) => (
+                    <tr key={user.userName} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                        {user.userName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {user.noOfAgentTask.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {user.noOfBuildspaces.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 font-medium">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        }).format(user.cost)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
+                      {loading ? 'Loading users...' : 'No user data available'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between">
