@@ -473,12 +473,118 @@ export function UserExtendedInsights({
     return null
   }, [changedRows])
 
+  // Generate monthly cost columns dynamically
+  const monthlyColumns = useMemo(() => {
+    if (!data.length) return []
+
+    // Get unique months from the data
+    const monthsSet = new Set<string>()
+    data.forEach(item => {
+      if (item.date) {
+        const date = new Date(item.date)
+        if (!isNaN(date.getTime())) {
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          monthsSet.add(monthKey)
+        }
+      }
+    })
+
+    // Convert to sorted array and create columns
+    const sortedMonths = Array.from(monthsSet).sort()
+    
+    return sortedMonths.map(monthKey => {
+      const [year, month] = monthKey.split('-')
+      const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString('en-US', { 
+        month: 'short', 
+        year: 'numeric' 
+      })
+
+      return {
+        field: `cost_${monthKey}`,
+        headerName: monthName,
+        enableValue: true,
+        sortable: true,
+        filter: 'agNumberColumnFilter',
+        minWidth: 120,
+        // Value getter to extract the cost for this specific month from each row
+        valueGetter: (params: any) => {
+          if (!params.data || !params.data.date || !params.data.cost) {
+            return 0
+          }
+          
+          const itemDate = new Date(params.data.date)
+          if (isNaN(itemDate.getTime())) {
+            return 0
+          }
+          
+          const itemMonthKey = `${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, '0')}`
+          if (itemMonthKey === monthKey) {
+            return Number(params.data.cost) || 0
+          }
+          
+          return 0
+        },
+        aggFunc: (params: any) => {
+          if (params.rowNode && params.rowNode.group) {
+            // This is a group row - sum costs for this month from all children
+            let totalCost = 0
+            
+            const collectFromChildren = (node: any) => {
+              if (node.childrenAfterGroup) {
+                node.childrenAfterGroup.forEach((childNode: any) => {
+                  if (childNode.group) {
+                    // Child is also a group, recursively collect from it
+                    collectFromChildren(childNode)
+                  } else {
+                    // Child is a leaf node, check if its date matches this month
+                    if (childNode.data?.date && childNode.data?.cost) {
+                      const itemDate = new Date(childNode.data.date)
+                      if (!isNaN(itemDate.getTime())) {
+                        const itemMonthKey = `${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, '0')}`
+                        if (itemMonthKey === monthKey) {
+                          totalCost += Number(childNode.data.cost) || 0
+                        }
+                      }
+                    }
+                  }
+                })
+              }
+            }
+            
+            collectFromChildren(params.rowNode)
+            return totalCost
+          } else {
+            // This is a leaf aggregation - sum the values
+            const values = params.values.filter((v: any) => v && v !== null && v !== undefined && v > 0)
+            return values.reduce((sum: number, val: number) => sum + val, 0)
+          }
+        },
+        valueFormatter: (params: any) => {
+          if (params.value == null || params.value === 0) return '$0.00'
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          }).format(Number(params.value))
+        },
+        cellStyle: (params: any) => {
+          // Highlight cells with values
+          if (params.value && params.value > 0) {
+            return { backgroundColor: '#f0f9ff', fontWeight: 'bold' }
+          }
+          return null
+        }
+      }
+    })
+  }, [data])
+
   const columnDefs: ColDef[] = useMemo(() => [
     {
       field: 'domain',
       headerName: 'Organization',
-      rowGroup: true,
-      hide: true,
+      rowGroup: isPivotMode,
+      hide: isPivotMode,
       enableRowGroup: true,
       filter: 'agTextColumnFilter',
       sortable: true
@@ -486,8 +592,8 @@ export function UserExtendedInsights({
     {
       field: 'projectName',
       headerName: 'Project Name',
-      rowGroup: true,
-      hide: true,
+      rowGroup: isPivotMode,
+      hide: isPivotMode,
       enableRowGroup: true,
       filter: 'agTextColumnFilter',
       sortable: true
@@ -495,8 +601,8 @@ export function UserExtendedInsights({
     {
       field: 'name',
       headerName: 'User Name',
-      rowGroup: true,
-      hide: true,
+      rowGroup: isPivotMode,
+      hide: isPivotMode,
       enableRowGroup: true,
       filter: 'agTextColumnFilter',
       sortable: true
@@ -672,6 +778,27 @@ export function UserExtendedInsights({
       }
     },
     {
+      field: 'usageCount',
+      headerName: 'Prompt',
+      aggFunc: 'sum',
+      enableValue: true,
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      minWidth: 120,
+      cellEditor: 'agTextCellEditor',
+      cellEditorParams: {
+        parseValue: (value: string) => {
+          const numValue = parseInt(value, 10)
+          return isNaN(numValue) || numValue < 0 ? 0 : numValue
+        }
+      },
+      valueFormatter: (params) => {
+        if (params.value == null) return '0'
+        return new Intl.NumberFormat('en-US').format(Number(params.value))
+      },
+      cellStyle: getCellStyle
+    },
+    {
       field: 'cost',
       headerName: 'Cost',
       aggFunc: 'sum',
@@ -697,28 +824,9 @@ export function UserExtendedInsights({
       },
       cellStyle: getCellStyle
     },
-    {
-      field: 'usageCount',
-      headerName: 'Prompt',
-      aggFunc: 'sum',
-      enableValue: true,
-      sortable: true,
-      filter: 'agNumberColumnFilter',
-      minWidth: 120,
-      cellEditor: 'agTextCellEditor',
-      cellEditorParams: {
-        parseValue: (value: string) => {
-          const numValue = parseInt(value, 10)
-          return isNaN(numValue) || numValue < 0 ? 0 : numValue
-        }
-      },
-      valueFormatter: (params) => {
-        if (params.value == null) return '0'
-        return new Intl.NumberFormat('en-US').format(Number(params.value))
-      },
-      cellStyle: getCellStyle
-    }
-  ], [isRowEditable, getCellStyle])
+    // Add monthly cost columns dynamically
+    ...monthlyColumns
+  ], [isRowEditable, getCellStyle, data, monthlyColumns, isPivotMode])
 
   const defaultColDef = useMemo(() => ({
     sortable: true,
@@ -1167,16 +1275,6 @@ export function UserExtendedInsights({
           undoRedoCellEditingLimit={20}
         />
       </div>
-
-      {/* Loading indicator */}
-      {loading && (
-        <div className="flex items-center justify-center py-4">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span>Loading data...</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
