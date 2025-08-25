@@ -249,71 +249,21 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       const expectedDays = eachDayOfInterval({ start: actualPeriodStart, end: actualPeriodEnd })
       const expectedDayKeys = expectedDays.map(day => format(day, 'yyyy-MM-dd'))
 
-      // For daily view, we just need users active on that specific day
-      if (timePeriod === 'daily') {
-        const dayData = Object.values(dailyData)[0] || []
-        const activeUsersSet = new Set(dayData.filter(item => Number(item.usageCount) > 0).map(item => item.email))
-        const activeBuildspacesSet = new Set(
-          dayData
-            .filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
-            .map(item => item.buildSpaceId!)
-        )
-        
-        var activeUsers = activeUsersSet.size
-        var activeBuildspaces = activeBuildspacesSet.size
-      } else {
-        // For weekly/monthly/yearly: users must be active on ALL days of the period
-        // Find unique users who had at least one prompt per day
-        const activeUsersPerDay = expectedDayKeys.map(dayKey => {
-          const dayData = dailyData[dayKey] || []
-          return new Set(dayData.filter(item => Number(item.usageCount) > 0).map(item => item.email))
-        })
-
-        // Find unique buildspaces that had at least one prompt per day
-        const activeBuildspacesPerDay = expectedDayKeys.map(dayKey => {
-          const dayData = dailyData[dayKey] || []
-          return new Set(
-            dayData
-              .filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
-              .map(item => item.buildSpaceId!)
-          )
-        })
-
-        // Find users who were active on ALL days in the period
-        const strictActiveUsers = new Set<string>()
-        const strictActiveBuildspaces = new Set<string>()
-
-        // Get all users who appear in the period
-        const allUsersInPeriod = new Set<string>()
-        const allBuildspacesInPeriod = new Set<string>()
-        
-        activeUsersPerDay.forEach(dayUsers => {
-          dayUsers.forEach(user => allUsersInPeriod.add(user))
-        })
-        
-        activeBuildspacesPerDay.forEach(dayBuildspaces => {
-          dayBuildspaces.forEach(buildspace => allBuildspacesInPeriod.add(buildspace))
-        })
-
-        // Check each user: they must be active on ALL days
-        allUsersInPeriod.forEach(user => {
-          const activeDays = activeUsersPerDay.filter(dayUsers => dayUsers.has(user)).length
-          if (activeDays === expectedDayKeys.length) {
-            strictActiveUsers.add(user)
-          }
-        })
-
-        // Check each buildspace: they must be active on ALL days
-        allBuildspacesInPeriod.forEach(buildspace => {
-          const activeDays = activeBuildspacesPerDay.filter(dayBuildspaces => dayBuildspaces.has(buildspace)).length
-          if (activeDays === expectedDayKeys.length) {
-            strictActiveBuildspaces.add(buildspace)
-          }
-        })
-
-        var activeUsers = strictActiveUsers.size
-        var activeBuildspaces = strictActiveBuildspaces.size
-      }
+      // For all time periods: users/buildspaces active at least once in the period
+      const activeUsersSet = new Set(
+        filteredPeriodData
+          .filter(item => Number(item.usageCount) > 0)
+          .map(item => item.email)
+      )
+      
+      const activeBuildspacesSet = new Set(
+        filteredPeriodData
+          .filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
+          .map(item => item.buildSpaceId!)
+      )
+      
+      var activeUsers = activeUsersSet.size
+      var activeBuildspaces = activeBuildspacesSet.size
       const totalPrompts = filteredPeriodData.reduce((sum, item) => sum + Number(item.usageCount), 0)
       const totalCost = filteredPeriodData.reduce((sum, item) => sum + Number(item.cost), 0)
       
@@ -451,67 +401,31 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
 
       switch (activeView) {
         case 'activeUsers':
-          // Map emails of users who were active in this period
+          // Map emails of users who were active in this period (consistent with new logic)
           const activeUserEmails = new Set<string>()
-          if (timePeriod === 'daily') {
-            periodData.filter(item => Number(item.usageCount) > 0).forEach(item => {
-              activeUserEmails.add(item.email)
-            })
-          } else {
-            // For weekly/monthly/yearly: users active on ALL days
-            const expectedDays = eachDayOfInterval({ start: periodStart, end: periodEnd })
-            const expectedDayKeys = expectedDays.map(day => format(day, 'yyyy-MM-dd'))
-            
-            const dailyData = periodData.reduce((acc, item) => {
-              const dateKey = item.date || ''
-              if (dateKey && !acc[dateKey]) {
-                acc[dateKey] = []
-              }
-              if (dateKey) {
-                acc[dateKey].push(item)
-              }
-              return acc
-            }, {} as { [date: string]: typeof periodData })
-
-            const activeUsersPerDay = expectedDayKeys.map(dayKey => {
-              const dayData = dailyData[dayKey] || []
-              return new Set(dayData.filter(item => Number(item.usageCount) > 0).map(item => item.email))
-            })
-
-            const allUsersInPeriod = new Set<string>()
-            activeUsersPerDay.forEach(dayUsers => {
-              dayUsers.forEach(user => allUsersInPeriod.add(user))
-            })
-
-            allUsersInPeriod.forEach(user => {
-              const activeDays = activeUsersPerDay.filter(dayUsers => dayUsers.has(user)).length
-              if (activeDays === expectedDayKeys.length) {
-                activeUserEmails.add(user)
-              }
-            })
-          }
+          periodData.filter(item => Number(item.usageCount) > 0).forEach(item => {
+            activeUserEmails.add(item.email)
+          })
           emailMapping = Array.from(activeUserEmails)
           value = period.activeUsers
           label = 'Active Users'
           break
 
         case 'activeBuildspaces':
-          // Map emails with unique buildspace IDs
-          const buildspaceEmailMap = new Map<string, Set<string>>()
+          // Map emails with their unique buildspace count for this period
+          const userBuildspaceMap = new Map<string, Set<string>>()
           periodData.filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
             .forEach(item => {
-              if (!buildspaceEmailMap.has(item.buildSpaceId!)) {
-                buildspaceEmailMap.set(item.buildSpaceId!, new Set())
+              if (!userBuildspaceMap.has(item.email)) {
+                userBuildspaceMap.set(item.email, new Set())
               }
-              buildspaceEmailMap.get(item.buildSpaceId!)!.add(item.email)
+              userBuildspaceMap.get(item.email)!.add(item.buildSpaceId!)
             })
           
-          // Get all unique emails associated with buildspaces
-          const buildspaceEmails = new Set<string>()
-          buildspaceEmailMap.forEach(emails => {
-            emails.forEach(email => buildspaceEmails.add(email))
-          })
-          emailMapping = Array.from(buildspaceEmails)
+          // Sort by buildspace count and format with counts
+          emailMapping = Array.from(userBuildspaceMap.entries())
+            .sort((a, b) => b[1].size - a[1].size)
+            .map(([email, buildspaces]) => `${email} (${buildspaces.size} buildspaces)`)
           value = period.activeBuildspaces
           label = 'Active Buildspaces'
           break
@@ -627,11 +541,11 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       case 'activeUsers':
         return timePeriod === 'daily' 
           ? 'Users with at least one prompt on this day'
-          : `Users with at least one prompt on ALL days of each ${timePeriod.slice(0, -2)} period`
+          : `Users with at least one prompt anywhere in each ${timePeriod.slice(0, -2)} period`
       case 'activeBuildspaces':
         return timePeriod === 'daily'
           ? 'Buildspaces with at least one prompt on this day'
-          : `Buildspaces with at least one prompt on ALL days of each ${timePeriod.slice(0, -2)} period`
+          : `Buildspaces with at least one prompt anywhere in each ${timePeriod.slice(0, -2)} period`
       case 'prompts':
         return 'Total usage count analysis'
       case 'cost':

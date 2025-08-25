@@ -27,24 +27,24 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
       icon: Grid3X3,
       description: 'Extended user insights with detailed analytics'
     },
-    {
-      id: 'organization' as const,
-      label: 'Organizations',
-      icon: Building2,
-      description: 'Organization-level insights and analytics'
-    },
-    {
-      id: 'project' as const,
-      label: 'Projects',
-      icon: FolderOpen,
-      description: 'Project-level insights and analytics'
-    },
-    {
-      id: 'user' as const,
-      label: 'Users',
-      icon: Users,
-      description: 'User-level insights and analytics'
-    }
+    // {
+    //   id: 'organization' as const,
+    //   label: 'Organizations',
+    //   icon: Building2,
+    //   description: 'Organization-level insights and analytics'
+    // },
+    // {
+    //   id: 'project' as const,
+    //   label: 'Projects',
+    //   icon: FolderOpen,
+    //   description: 'Project-level insights and analytics'
+    // },
+    // {
+    //   id: 'user' as const,
+    //   label: 'Users',
+    //   icon: Users,
+    //   description: 'User-level insights and analytics'
+    // }
   ]
 
 
@@ -53,7 +53,7 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
 
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        {/* <nav className="-mb-px flex space-x-8">
           {tabs.map((tab) => {
             const Icon = tab.icon
             return (
@@ -75,7 +75,7 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
               </button>
             )
           })}
-        </nav>
+        </nav> */}
       </div>
 
       {/* Description */}
