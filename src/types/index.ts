@@ -107,3 +107,24 @@ export interface UserLevelInsightsResponse {
   count: number;
   users: UserModel[];
 }
+
+
+export interface UserExtendedModel {
+    date: string,
+    email: string,
+    projectId: string,
+    taskId: string,
+    user: string,
+    cost: Number,
+    usageCount: Number,
+    domain: string,
+    name: string,
+    buildSpaceId: string | undefined,
+    projectName: string
+}
+
+export interface UserLevelExtendedInsightsResponse {
+  status_code: number;
+  count: number;
+  users_extended: UserExtendedModel[];
+}

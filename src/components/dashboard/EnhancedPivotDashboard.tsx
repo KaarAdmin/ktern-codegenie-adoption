@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { OrganizationAgGridPivot } from './OrganizationAgGridPivot'
 import { ProjectAgGridPivot } from './ProjectAgGridPivot'
 import { UserAgGridPivot } from './UserAgGridPivot'
+import { UserExtendedInsights } from './UserExtendedInsights'
 import { OrganizationCharts } from './charts/OrganizationCharts'
 import { ProjectCharts } from './charts/ProjectCharts'
 import { UserCharts } from './charts/UserCharts'
@@ -16,10 +17,16 @@ interface EnhancedPivotDashboardProps {
 }
 
 export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'organization' | 'project' | 'user'>('organization')
+  const [activeTab, setActiveTab] = useState<'organization' | 'project' | 'user' | 'userExtended'>('userExtended')
   const [globalFilters, setGlobalFilters] = useState<Record<string, string | undefined>>({})
 
   const tabs = [
+    {
+      id: 'userExtended' as const,
+      label: 'Executive Overview',
+      icon: Grid3X3,
+      description: 'Extended user insights with detailed analytics'
+    },
     {
       id: 'organization' as const,
       label: 'Organizations',
@@ -113,6 +120,13 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
           
           {activeTab === 'user' && (
             <UserAgGridPivot
+              filters={globalFilters}
+              className="w-full"
+            />
+          )}
+          
+          {activeTab === 'userExtended' && (
+            <UserExtendedInsights
               filters={globalFilters}
               className="w-full"
             />
