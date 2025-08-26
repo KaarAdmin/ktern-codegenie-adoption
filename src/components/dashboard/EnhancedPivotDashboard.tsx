@@ -52,7 +52,7 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
     <div className={`space-y-6 ${className}`}>
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200">
+      {/* <div className="border-b border-gray-200"> */}
         {/* <nav className="-mb-px flex space-x-8">
           {tabs.map((tab) => {
             const Icon = tab.icon
@@ -76,7 +76,7 @@ export function EnhancedPivotDashboard({ className = '' }: EnhancedPivotDashboar
             )
           })}
         </nav> */}
-      </div>
+      {/* </div> */}
 
       {/* Description */}
       {/* <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

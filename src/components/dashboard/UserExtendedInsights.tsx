@@ -9,7 +9,7 @@ import { ExportDropdown } from '@/components/ui/ExportDropdown'
 import { Card } from '@/components/ui/Card'
 import { isAuthorizedUser, getCurrentUserEmail } from '@/lib/auth'
 import { useToastActions } from '@/contexts/ToastContext'
-import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare } from 'lucide-react'
+import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare, Activity } from 'lucide-react'
 import { WeeklyStatsAnalytics } from './WeeklyStatsAnalytics'
 import 'ag-grid-enterprise'
 
@@ -142,7 +142,7 @@ export function UserExtendedInsights({
       totalProjects: uniqueProjects.size,
       totalBuildspaces: uniqueBuildspaces.size,
       totalUsers: uniqueUsers.size,
-      totalCost: totalCost,
+      totalCost: parseFloat(totalCost.toFixed(2)),
       totalAgenticCost: uniqueTaskIds.size,
       totalPrompts: totalPrompts
     }
@@ -958,41 +958,77 @@ export function UserExtendedInsights({
 
         {/* Summary Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-blue-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-blue-100 hover:shadow-md"
+            title="Total number of active organizations"
+          >
             <div className="text-2xl font-bold text-blue-600">{summaryStats.totalOrganizations}</div>
             <div className="text-sm text-blue-800">Organizations</div>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-green-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-green-100 hover:shadow-md"
+            title="Total number of active projects across all organizations"
+          >
             <div className="text-2xl font-bold text-green-600">{summaryStats.totalProjects}</div>
             <div className="text-sm text-green-800">Projects</div>
           </div>
-          <div className="bg-purple-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-purple-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-purple-100 hover:shadow-md"
+            title="Total number of active buildspaces created by users"
+          >
             <div className="text-2xl font-bold text-purple-600">{summaryStats.totalBuildspaces}</div>
             <div className="text-sm text-purple-800">Buildspaces</div>
           </div>
-          <div className="bg-orange-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-orange-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-orange-100 hover:shadow-md"
+            title="Total number of active users across all organizations"
+          >
             <div className="text-2xl font-bold text-orange-600">{summaryStats.totalUsers}</div>
             <div className="text-sm text-orange-800">Users</div>
           </div>
-          <div className="bg-emerald-50 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-emerald-600">
+          <div 
+            className="bg-emerald-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-emerald-100 hover:shadow-md"
+            title="Total cost incurred across all users, projects, and organizations"
+          >
+            <div className="text-xl md:text-1.5xl font-bold text-emerald-600">
               ${summaryStats.totalCost.toLocaleString()}
             </div>
             <div className="text-sm text-emerald-800">Cost</div>
           </div>
-          <div className="bg-indigo-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-indigo-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-indigo-100 hover:shadow-md"
+            title="Total number of active agentic tasks created by users"
+          >
             <div className="text-2xl font-bold text-indigo-600">{summaryStats.totalAgenticCost}</div>
             <div className="text-sm text-indigo-800">Agentic Task</div>
           </div>
-          <div className="bg-pink-50 p-4 rounded-lg text-center">
+          <div 
+            className="bg-pink-50 p-4 rounded-lg text-center cursor-help transition-all duration-200 hover:bg-pink-100 hover:shadow-md"
+            title="Total number of prompts count across all users and projects"
+          >
             <div className="text-2xl font-bold text-pink-600">{summaryStats.totalPrompts}</div>
             <div className="text-sm text-pink-800">Prompts</div>
           </div>
         </div>
       </Card>
 
-      {/* Weekly Statistics Analytics */}
-      <WeeklyStatsAnalytics data={data} />
+      {/* Combined Daily Statistics Analytics and User Trend */}
+      <Card className="p-3">
+        <div className="flex flex-col space-y-3">
+          {/* Header Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-5 w-5 text-blue-600" />
+              <h2 className="text-base font-semibold text-gray-900">Daily Statistics Analytics & User Trend</h2>
+              <span className="text-sm text-gray-500">Analyze daily trends across users, projects, and organizations</span>
+            </div>
+          </div>
+          
+          {/* WeeklyStatsAnalytics Component */}
+          <WeeklyStatsAnalytics data={data} embedded={true} />
+        </div>
+      </Card>
+
 
       {/* Top 5 Tables - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
