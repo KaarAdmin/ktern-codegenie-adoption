@@ -31,7 +31,9 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   Activity,
-  ChevronDown
+  ChevronDown,
+  ChevronUp,
+  X
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
 
@@ -104,6 +106,21 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
 
   const handlePeriodsSelection = useCallback((periods: number) => {
     setDataLimit(periods)
+    setShowPeriodsDropdown(false)
+  }, [])
+
+  // Clear all filters function
+  const handleClearAllFilters = useCallback(() => {
+    setSelectedOrganization('all')
+    setSelectedProject('all')
+    setSelectedEmail('all')
+    setDataLimit(10)
+    setOrgSearchTerm('')
+    setProjectSearchTerm('')
+    setEmailSearchTerm('')
+    setShowOrgDropdown(false)
+    setShowProjectDropdown(false)
+    setShowEmailDropdown(false)
     setShowPeriodsDropdown(false)
   }, [])
 
@@ -467,7 +484,17 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
               <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-600 pointer-events-none" />
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              {showOrgDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowOrgDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowOrgDropdown(true)}
+                />
+              )}
               <input
                 type="text"
                 value={showOrgDropdown ? orgSearchTerm : (selectedOrganization === 'all' ? 'All Organizations' : selectedOrganization)}
@@ -504,7 +531,17 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
               <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-600 pointer-events-none" />
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              {showProjectDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowProjectDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowProjectDropdown(true)}
+                />
+              )}
               <input
                 type="text"
                 value={showProjectDropdown ? projectSearchTerm : (selectedProject === 'all' ? 'All Projects' : selectedProject)}
@@ -541,7 +578,17 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
               <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-orange-600 pointer-events-none" />
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              {showEmailDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowEmailDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowEmailDropdown(true)}
+                />
+              )}
               <input
                 type="text"
                 value={showEmailDropdown ? emailSearchTerm : (selectedEmail === 'all' ? 'All Users' : selectedEmail)}
@@ -578,7 +625,17 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-600 pointer-events-none" />
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              {showPeriodsDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowPeriodsDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowPeriodsDropdown(true)}
+                />
+              )}
               <input
                 type="text"
                 value={dataLimit === 0 ? 'All Periods' : `Last ${dataLimit}`}
@@ -616,6 +673,22 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                 </div>
               )}
             </div>
+          </div>
+          
+          {/* Clear All Filters Button */}
+          <div className="flex-shrink-0">
+            <Button
+              onClick={handleClearAllFilters}
+              variant="outline"
+              size="sm"
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            >
+              {/* <X className="h-4 w-4 mr-1" /> */}
+
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#666666"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/></svg>
+              {/* <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="24px" fill="#666666"><path d="m592-481-57-57 143-182H353l-80-80h487q25 0 36 22t-4 42L592-481ZM791-56 560-287v87q0 17-11.5 28.5T520-160h-80q-17 0-28.5-11.5T400-200v-247L56-791l56-57 736 736-57 56ZM535-538Z"/></svg> */}
+              Clear All
+            </Button>
           </div>
         </div>
 
