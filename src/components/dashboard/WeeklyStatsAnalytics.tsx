@@ -460,18 +460,85 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
   }
 
   const chartData = useMemo(() => {
-    return timeSeriesData.map(period => ({
-      week: period.period,
-      value: activeView === 'activeUsers' ? period.activeUsers :
-             activeView === 'activeBuildspaces' ? period.activeBuildspaces :
-             activeView === 'prompts' ? period.totalPrompts :
-             activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost,
-      label: activeView === 'activeUsers' ? 'Active Users' :
-             activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
-             activeView === 'prompts' ? 'Total Prompts' :
-             activeView === 'agenticTasks' ? 'Agentic Tasks' : 'Total Cost ($)'
-    }))
-  }, [timeSeriesData, activeView])
+    return timeSeriesData.map(period => {
+      // Get the period data with filters applied
+      const periodStart = parseISO(period.periodStart)
+      const periodEnd = parseISO(period.periodEnd)
+      
+      const periodData = data.filter(item => {
+        try {
+          const itemDate = parseISO(item.date)
+          if (!isValid(itemDate)) return false
+          
+          const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
+          const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+          const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+          const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+          
+          return dateMatch && orgMatch && projectMatch && emailMatch
+        } catch {
+          return false
+        }
+      })
+
+      // Create email mapping based on the active view
+      let emailMapping: string[] = []
+      
+      if (activeView === 'activeUsers') {
+        emailMapping = Array.from(new Set(
+          periodData
+            .filter(item => Number(item.usageCount) > 0)
+            .map(item => item.email)
+        ))
+      } else if (activeView === 'activeBuildspaces') {
+        emailMapping = Array.from(new Set(
+          periodData
+            .filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A' && Number(item.usageCount) > 0)
+            .map(item => item.email)
+        ))
+      } else if (activeView === 'prompts') {
+        // Group by email and sum prompts, then sort
+        const emailPrompts = periodData.reduce((acc, item) => {
+          acc[item.email] = (acc[item.email] || 0) + Number(item.usageCount)
+          return acc
+        }, {} as Record<string, number>)
+        
+        emailMapping = Object.entries(emailPrompts)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, count]) => `${email} (${count})`)
+      } else if (activeView === 'cost') {
+        // Group by email and sum cost, then sort
+        const emailCosts = periodData.reduce((acc, item) => {
+          acc[item.email] = (acc[item.email] || 0) + Number(item.cost)
+          return acc
+        }, {} as Record<string, number>)
+        
+        emailMapping = Object.entries(emailCosts)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, cost]) => `${email} ($${cost.toFixed(2)})`)
+      } else if (activeView === 'agenticTasks') {
+        // Get unique emails that have agentic tasks
+        emailMapping = Array.from(new Set(
+          periodData
+            .filter(item => item.taskId && item.taskId !== 'N/A')
+            .map(item => item.email)
+        ))
+      }
+
+      return {
+        week: period.period,
+        value: activeView === 'activeUsers' ? period.activeUsers :
+               activeView === 'activeBuildspaces' ? period.activeBuildspaces :
+               activeView === 'prompts' ? period.totalPrompts :
+               activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost,
+        label: activeView === 'activeUsers' ? 'Active Users' :
+               activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
+               activeView === 'prompts' ? 'Total Prompts' :
+               activeView === 'agenticTasks' ? 'Agentic Tasks' : 'Total Cost ($)',
+        emailMapping
+      }
+    })
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
 
   const renderChart = () => {
     const chartWidth = Math.max(800, chartData.length * 80)
@@ -484,14 +551,88 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" angle={-45} textAnchor="end" height={100} fontSize={12} interval={0} />
-                <YAxis tickFormatter={(value) => activeView === 'cost' ? `$${value}` : value.toLocaleString()} />
-                <Tooltip />
+                <XAxis 
+                  dataKey="week" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  fontSize={12}
+                  interval={0}
+                />
+                <YAxis 
+                  tickFormatter={(value) => {
+                    if (activeView === 'cost') {
+                      return `$${value}`
+                    }
+                    return value.toLocaleString()
+                  }}
+                />
+                <Tooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0) {
+                      const data = payload[0].payload;
+                      const emailMapping = data.emailMapping || [];
+                      
+                      return (
+                        <div 
+                          className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                          style={{ 
+                            pointerEvents: 'none',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                          <div className="text-blue-600 mb-2">
+                            <span className="font-medium">{data.label}:</span> {
+                              activeView === 'cost' 
+                                ? `$${data.value.toFixed(2)}` 
+                                : data.value.toLocaleString()
+                            }
+                          </div>
+                          {emailMapping.length > 0 && (
+                            <div className="text-gray-600">
+                              <div className="font-medium text-gray-700 mb-1">
+                                {activeView === 'activeUsers' ? 'Active Users:' :
+                                 activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
+                                 activeView === 'prompts' ? 'Users by Prompt Count:' :
+                                 activeView === 'cost' ? 'Users by Cost:' :
+                                 'Users by Task Count:'}
+                              </div>
+                              <div className="text-xs space-y-1">
+                                {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                  <div key={index} className="truncate">
+                                    {email}
+                                  </div>
+                                ))}
+                                {emailMapping.length > 8 && (
+                                  <div className="text-gray-500 italic">
+                                    ... and {emailMapping.length - 8} more users
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  cursor={false}
+                />
                 <Legend />
-                <Bar dataKey="value" fill="#8884d8" name={chartData[0]?.label || 'Value'} />
+                <Bar 
+                  dataKey="value" 
+                  fill="#8884d8" 
+                  name={chartData[0]?.label || 'Value'}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {needsScroll && (
+            <div className="text-xs text-gray-500 mt-2 text-center">
+              ← Scroll horizontally to view all data points →
+            </div>
+          )}
         </div>
       )
     }
@@ -502,14 +643,91 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="week" angle={-45} textAnchor="end" height={100} fontSize={12} interval={0} />
-              <YAxis tickFormatter={(value) => activeView === 'cost' ? `$${value}` : value.toLocaleString()} />
-              <Tooltip />
+              <XAxis 
+                dataKey="week" 
+                angle={-45}
+                textAnchor="end"
+                height={100}
+                fontSize={12}
+                interval={0}
+              />
+              <YAxis 
+                tickFormatter={(value) => {
+                  if (activeView === 'cost') {
+                    return `$${value}`
+                  }
+                  return value.toLocaleString()
+                }}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length > 0) {
+                    const data = payload[0].payload;
+                    const emailMapping = data.emailMapping || [];
+                    
+                    return (
+                      <div 
+                        className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                        style={{ 
+                          pointerEvents: 'none',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                        <div className="text-blue-600 mb-2">
+                          <span className="font-medium">{data.label}:</span> {
+                            activeView === 'cost' 
+                              ? `$${data.value.toFixed(2)}` 
+                              : data.value.toLocaleString()
+                          }
+                        </div>
+                        {emailMapping.length > 0 && (
+                          <div className="text-gray-600">
+                            <div className="font-medium text-gray-700 mb-1">
+                              {activeView === 'activeUsers' ? 'Active Users:' :
+                               activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
+                               activeView === 'prompts' ? 'Users by Prompt Count:' :
+                               activeView === 'cost' ? 'Users by Cost:' :
+                               'Users by Task Count:'}
+                            </div>
+                            <div className="text-xs space-y-1">
+                              {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                <div key={index} className="truncate">
+                                  {email}
+                                </div>
+                              ))}
+                              {emailMapping.length > 8 && (
+                                <div className="text-gray-500 italic">
+                                  ... and {emailMapping.length - 8} more users
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+                cursor={false}
+              />
               <Legend />
-              <Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} dot={{ r: 4 }} name={chartData[0]?.label || 'Value'} />
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke="#8884d8" 
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                name={chartData[0]?.label || 'Value'}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {needsScroll && (
+          <div className="text-xs text-gray-500 mt-2 text-center">
+            ← Scroll horizontally to view all data points →
+          </div>
+        )}
       </div>
     )
   }
