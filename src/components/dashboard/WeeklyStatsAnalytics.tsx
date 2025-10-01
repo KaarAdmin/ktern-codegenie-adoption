@@ -343,17 +343,57 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
+    // Get the date range from timeSeriesData (which already respects period and limit filters)
+    if (timeSeriesData.length === 0) {
+      return {
+        totalPeriods: 0,
+        uniqueActiveUsers: 0,
+        uniqueActiveBuildspaces: 0,
+        avgActiveUsers: 0,
+        avgActiveBuildspaces: 0,
+        totalPrompts: 0,
+        totalCost: 0,
+        totalAgenticTasks: 0,
+        avgPeriodPrompts: 0,
+        avgPeriodCost: 0,
+        avgAgenticTasks: 0,
+        peakPeriod: 'N/A'
+      }
+    }
+
+    const firstPeriod = timeSeriesData[0]
+    const lastPeriod = timeSeriesData[timeSeriesData.length - 1]
+    const startDate = parseISO(firstPeriod.periodStart)
+    const endDate = parseISO(lastPeriod.periodEnd)
+
+    // Apply all filters including date range
+    const filteredData = data.filter(item => {
+      try {
+        const itemDate = parseISO(item.date)
+        if (!isValid(itemDate)) return false
+        
+        const dateMatch = itemDate >= startDate && itemDate <= endDate
+        const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+        const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+        const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+        
+        return dateMatch && orgMatch && projectMatch && emailMatch
+      } catch {
+        return false
+      }
+    })
+    
     const totalPeriods = timeSeriesData.length
-    const uniqueActiveUsers = new Set(data.map(item => item.email)).size
+    const uniqueActiveUsers = new Set(filteredData.map(item => item.email)).size
     const uniqueActiveBuildspaces = new Set(
-      data.filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A').map(item => item.buildSpaceId)
+      filteredData.filter(item => item.buildSpaceId && item.buildSpaceId !== 'N/A').map(item => item.buildSpaceId)
     ).size
     
     const avgActiveUsers = totalPeriods > 0 ? timeSeriesData.reduce((sum, period) => sum + period.activeUsers, 0) / totalPeriods : 0
     const avgActiveBuildspaces = totalPeriods > 0 ? timeSeriesData.reduce((sum, period) => sum + period.activeBuildspaces, 0) / totalPeriods : 0
     const totalPrompts = timeSeriesData.reduce((sum, period) => sum + period.totalPrompts, 0)
     const totalCost = timeSeriesData.reduce((sum, period) => sum + period.totalCost, 0)
-    const totalAgenticTasks = new Set(data.filter(item => item.taskId && item.taskId !== 'N/A').map(item => item.taskId!)).size
+    const totalAgenticTasks = new Set(filteredData.filter(item => item.taskId && item.taskId !== 'N/A').map(item => item.taskId!)).size
     
     const avgPeriodPrompts = totalPeriods > 0 ? totalPrompts / totalPeriods : 0
     const avgPeriodCost = totalPeriods > 0 ? totalCost / totalPeriods : 0
@@ -385,7 +425,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
       avgAgenticTasks: Math.round(avgAgenticTasks),
       peakPeriod: peakPeriod?.period || 'N/A'
     }
-  }, [timeSeriesData, activeView, data])
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
 
   const viewOptions = [
     { id: 'activeUsers' as const, label: 'User', icon: Users },
