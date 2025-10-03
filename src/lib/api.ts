@@ -126,10 +126,9 @@ export async function apiRequest<T>(
         throw new ApiError(response.status, `API request failed: ${response.statusText}`)
       }
       return await response.json()
-    }
-    
+    }    
     // Check for token expiration error
-    if (responseData.detail && (String(responseData.detail).includes("Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired"))) {
+    if ((responseData.detail || responseData.message) && (String(responseData.detail).includes("Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired") || String(responseData.message).includes("Token has expired"))) {
       try {
         const newToken = await refreshToken()
         
