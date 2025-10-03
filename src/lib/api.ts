@@ -129,7 +129,7 @@ export async function apiRequest<T>(
     }
     
     // Check for token expiration error
-    if (responseData.detail && (String(responseData.detail).includes("401: Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired"))) {
+    if (responseData.detail && (String(responseData.detail).includes("Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired"))) {
       try {
         const newToken = await refreshToken()
         
