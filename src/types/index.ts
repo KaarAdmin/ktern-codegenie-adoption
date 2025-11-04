@@ -22,31 +22,6 @@ export interface User {
 }
 
 
-
-export interface Organization {
-  organization: string;
-  projectID: string;
-  projectName: string;
-  createdOn: string;
-  country: string;
-  sbu: string;
-  industry: string;
-  active: boolean;
-  totalUsers: number;
-  totalUsersInvited: number;
-  totalActiveUser: number;
-  totalProject: number;
-  totalActiveProject: number;
-  lastCodeGenieEventOn: string | null;
-  app_deployed_count: number;
-  app_generated_count: number;
-  totalEvents: number;
-  totalCost: number;
-  eventsLast4Weeks: number;
-  // members: Record<string; string>;
-  [key: string]: any;
-}
-
 export interface OrganizationLevelInsightsResponse {
   status_code: number;
   count: number;
@@ -72,6 +47,10 @@ export interface OrganizationModel {
   totalUsers: number;
   totalUsersAccepted: number;
   totalUsersInvited: number;
+  globalTotalActiveUser: number;
+  globalTotalUsers: number;
+  globalTotalUsersAccepted: number;
+  globalTotalUsersInvited: number;
 }
 
 
@@ -94,6 +73,10 @@ export interface ProjectModel {
   totalEvents: number;
   totalCost: number;
   eventsLast4Weeks: number;
+  globalTotalActiveUser: number;
+  globalTotalUsers: number;
+  globalTotalUsersAccepted: number;
+  globalTotalUsersInvited: number;
 }
 
 export interface ProjectLevelInsightsResponse {
@@ -116,10 +99,32 @@ export interface UserModel {
   status: string;
   totalCost: number;
   totalEvents: number;
+  domain:string;
 }
 
 export interface UserLevelInsightsResponse {
   status_code: number;
   count: number;
   users: UserModel[];
+}
+
+
+export interface UserExtendedModel {
+    date: string,
+    email: string,
+    projectId: string,
+    taskId: string,
+    user: string,
+    cost: Number,
+    usageCount: Number,
+    domain: string,
+    name: string,
+    buildSpaceId: string | undefined,
+    projectName: string
+}
+
+export interface UserLevelExtendedInsightsResponse {
+  status_code: number;
+  count: number;
+  users_extended: UserExtendedModel[];
 }

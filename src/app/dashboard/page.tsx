@@ -39,18 +39,15 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">K</span>
-                </div>
-                <span className="text-xl font-semibold text-gray-900">KTern CodeGenie</span>
+                <img
+                  src="https://app.ktern.com/codegenie/frontend/_next/static/media/KTern.d14aee5e.png"
+                  alt="KTern Logo"
+                  className="h-8 w-auto"
+                />
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <User className="h-4 w-4" />
-                <span>{user.email}</span>
-              </div>
               
               <Button
                 variant="outline"
@@ -67,7 +64,7 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Content */}
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-4 sm:px-6 lg:px-4 py-1">
         <EnhancedPivotDashboard />
       </main>
     </div>

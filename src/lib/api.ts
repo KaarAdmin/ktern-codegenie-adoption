@@ -1,4 +1,4 @@
-import { LoginRequest, LoginResponse, RefreshTokenRequest, OrganizationLevelInsightsResponse, ProjectLevelInsightsResponse, UserLevelInsightsResponse } from '@/types'
+import { LoginRequest, LoginResponse, RefreshTokenRequest, OrganizationLevelInsightsResponse, ProjectLevelInsightsResponse, UserLevelInsightsResponse, UserLevelExtendedInsightsResponse } from '@/types'
 
 const LEGACY_APP_URL = process.env.NEXT_PUBLIC_LEGACY_APP_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -126,10 +126,9 @@ export async function apiRequest<T>(
         throw new ApiError(response.status, `API request failed: ${response.statusText}`)
       }
       return await response.json()
-    }
-    
+    }    
     // Check for token expiration error
-    if (responseData.detail && (String(responseData.detail).includes("401: Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired"))) {
+    if ((responseData.detail || responseData.message) && (String(responseData.detail).includes("Token has expired") || String(responseData.detail).includes("invalid payload - Signature has expired") || String(responseData.message).includes("Token has expired"))) {
       try {
         const newToken = await refreshToken()
         
@@ -219,6 +218,59 @@ export async function getUserLevelInsightsResponse(filters: Record<string, strin
   const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
 
   return apiRequest<UserLevelInsightsResponse>(url)
+}
+
+export async function getUserLevelExtendedInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelExtendedInsightsResponse> {
+  const queryParams = new URLSearchParams()
+  
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined) {
+      // Convert boolean to string
+      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
+    }
+  })
+  // console.log('Query Params:', queryParams.toString())
+  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+
+  return apiRequest<UserLevelExtendedInsightsResponse>(url)
+}
+
+// Update functions for pivot table data
+export async function updateOrganizationData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ organizations: data }),
+  })
+}
+
+export async function updateProjectData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ projects: data }),
+  })
+}
+
+export async function updateUserData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ users: data }),
+  })
+}
+
+// Update functions for pivot table data
+export async function updateUserExtendedData(data: any[]): Promise<{ status_code: Number; detail: string }> {
+  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights`
+  
+  return apiRequest<{ status_code: Number; detail: string }>(url, {
+    method: 'PUT',
+    body: JSON.stringify({ users: data }),
+  })
 }
 
 export function logout(): void {
