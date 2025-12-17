@@ -33,14 +33,15 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  Timer
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
+import dayjs from 'dayjs'
 
 interface TimeSeriesAnalyticsProps {
   data: UserExtendedModel[]
   className?: string
-  embedded?: boolean
 }
 
 interface TimeSeriesData {
@@ -58,13 +59,13 @@ interface TimeSeriesData {
   agenticTaskBreakdown: { [key: string]: number }
 }
 
-type ViewType = 'activeUsers' | 'activeBuildspaces' | 'prompts' | 'cost' | 'agenticTasks'
+type ViewType = 'activeUsers' | 'activeBuildspaces' | 'prompts' | 'cost' | 'agenticTasks' | 'runtime'
 type ChartType = 'line' | 'bar'
 type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
 
-export function WeeklyStatsAnalytics({ data, className = '', embedded = false }: TimeSeriesAnalyticsProps) {
+export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyticsProps) {
   const [activeView, setActiveView] = useState<ViewType>('activeUsers')
   const [chartType, setChartType] = useState<ChartType>('line')
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('daily')
@@ -72,7 +73,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedEmail, setSelectedEmail] = useState<string>('all')
   const [dataLimit, setDataLimit] = useState<number>(10)
-  
+   
   // Search states for dropdowns
   const [orgSearchTerm, setOrgSearchTerm] = useState<string>('')
   const [projectSearchTerm, setProjectSearchTerm] = useState<string>('')
@@ -341,6 +342,31 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     })
   }, [data, selectedOrganization, selectedProject, selectedEmail, timePeriod, dataLimit])
 
+  // DevZone data processing from API data
+  const devzoneStats = useMemo(() => {
+    const devzoneData = data.filter(item => item.taskId === 'devzone_tracking')
+    const totalRuntime = devzoneData.reduce((sum, item) => {
+      const runtime = (item as any).devzone_total_runtime_minutes || 0
+      return sum + Number(runtime)
+    }, 0)
+    const totalSessions = devzoneData.reduce((sum, item) => {
+      const sessions = (item as any).user_sessions ? Object.keys((item as any).user_sessions).length : 0
+      return sum + sessions
+    }, 0)
+    
+    return { totalRuntime, totalSessions }
+  }, [data])
+
+  const formatDuration = (minutes: number) => {
+    if (!minutes || isNaN(minutes)) return '0m'
+    const hours = Math.floor(minutes / 60)
+    const mins = Math.round(minutes % 60)
+    if (hours > 0) {
+      return `${hours}h ${mins}m`
+    }
+    return `${mins}m`
+  }
+
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
     // Get the date range from timeSeriesData (which already respects period and limit filters)
@@ -432,7 +458,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     { id: 'activeBuildspaces' as const, label: 'Buildspace', icon: Layers },
     { id: 'prompts' as const, label: 'Prompt', icon: MessageSquare },
     { id: 'cost' as const, label: 'Cost', icon: DollarSign },
-    { id: 'agenticTasks' as const, label: 'Agentic Task', icon: Activity }
+    { id: 'agenticTasks' as const, label: 'Agentic Task', icon: Activity },
+    { id: 'runtime' as const, label: 'Runtime', icon: Timer }
   ]
 
   const chartTypeOptions = [
@@ -459,7 +486,40 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     }
   }
 
+  // DevZone chart data for runtime view from API data
+  const devzoneChartData = useMemo(() => {
+    const devzoneData = data.filter(item => item.taskId === 'devzone_tracking')
+    const dateMap = new Map<string, number>()
+    
+    devzoneData.forEach(item => {
+      const normalizedDate = dayjs(item.date).format('YYYY-MM-DD')
+      const currentDuration = dateMap.get(normalizedDate) || 0
+      const runtime = (item as any).devzone_total_runtime_minutes || 0
+      dateMap.set(normalizedDate, currentDuration + Number(runtime))
+    })
+
+    // If no devzone data, create empty data points based on timeSeriesData periods
+    if (dateMap.size === 0 && timeSeriesData.length > 0) {
+      return timeSeriesData.map(period => ({
+        week: period.period,
+        value: 0,
+        label: 'Runtime (minutes)',
+        emailMapping: []
+      }))
+    }
+
+    const sortedDates = Array.from(dateMap.keys()).sort()
+    return sortedDates.map(date => ({
+      week: dayjs(date).format('MMM DD, YYYY'),
+      value: dateMap.get(date) || 0,
+      label: 'Runtime (minutes)',
+      emailMapping: []
+    }))
+  }, [data, timeSeriesData])
+
   const chartData = useMemo(() => {
+    if (activeView === 'runtime') return devzoneChartData
+    
     return timeSeriesData.map(period => {
       // Get the period data with filters applied
       const periodStart = parseISO(period.periodStart)
@@ -469,6 +529,9 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         try {
           const itemDate = parseISO(item.date)
           if (!isValid(itemDate)) return false
+          
+          // Exclude devzone_tracking for non-runtime views
+          if (item.taskId === 'devzone_tracking') return false
           
           const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
           const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
@@ -538,7 +601,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         emailMapping
       }
     })
-  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail, devzoneChartData])
 
   const renderChart = () => {
     const chartWidth = Math.max(800, chartData.length * 80)
@@ -564,6 +627,9 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                     if (activeView === 'cost') {
                       return `$${value}`
                     }
+                    if (activeView === 'runtime') {
+                      return formatDuration(value)
+                    }
                     return value.toLocaleString()
                   }}
                 />
@@ -586,6 +652,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                             <span className="font-medium">{data.label}:</span> {
                               activeView === 'cost' 
                                 ? `$${data.value.toFixed(2)}` 
+                                : activeView === 'runtime'
+                                ? formatDuration(data.value)
                                 : data.value.toLocaleString()
                             }
                           </div>
@@ -656,6 +724,9 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                   if (activeView === 'cost') {
                     return `$${value}`
                   }
+                  if (activeView === 'runtime') {
+                    return formatDuration(value)
+                  }
                   return value.toLocaleString()
                 }}
               />
@@ -678,6 +749,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                           <span className="font-medium">{data.label}:</span> {
                             activeView === 'cost' 
                               ? `$${data.value.toFixed(2)}` 
+                              : activeView === 'runtime'
+                              ? formatDuration(data.value)
                               : data.value.toLocaleString()
                           }
                         </div>
@@ -732,10 +805,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     )
   }
 
-  // When embedded, render without the outer card structure
-  if (embedded) {
-    return (
-      <div className={`space-y-3 ${className}`}>
+  return (
+    <div className={`space-y-3 ${className}`}>
         {/* Filters Row */}
         <div className="flex items-center gap-2 min-w-0">
           {/* Organization Filter */}
@@ -951,7 +1022,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         </div>
 
         {/* Summary Stats Grid */}
-        <div className="mt-4 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+        <div className="mt-4 grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-2">
           <div className="bg-blue-50 p-2 rounded text-center border border-blue-100">
             <div className="text-base font-bold text-blue-600">{summaryStats.totalPeriods}</div>
             <div className="text-xs text-blue-800">Total Periods</div>
@@ -976,10 +1047,18 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             <div className="text-base font-bold text-indigo-600">{summaryStats.totalAgenticTasks}</div>
             <div className="text-xs text-indigo-800">Agentic Tasks</div>
           </div>
+          <div className="bg-sky-50 p-2 rounded text-center border border-sky-100">
+            <div className="text-base font-bold text-sky-600">{formatDuration(devzoneStats.totalRuntime)}</div>
+            <div className="text-xs text-sky-800">Total Runtime</div>
+          </div>
+          <div className="bg-emerald-50 p-2 rounded text-center border border-emerald-100">
+            <div className="text-base font-bold text-emerald-600">{devzoneStats.totalSessions}</div>
+            <div className="text-xs text-emerald-800">Total Sessions</div>
+          </div>
         </div>
 
         {/* Average Stats Grid */}
-        <div className="mt-2 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+        <div className="mt-2 grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-2">
           <div className="bg-slate-50 p-1.5 rounded text-center border border-slate-100">
             <div className="text-xs font-semibold text-slate-600">{summaryStats.peakPeriod.slice(0, 12)}...</div>
             <div className="text-xs text-slate-800">Peak Period</div>
@@ -1004,6 +1083,14 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             <div className="text-xs font-semibold text-cyan-600">{summaryStats.avgAgenticTasks}</div>
             <div className="text-xs text-cyan-800">Avg Tasks</div>
           </div>
+          <div className="bg-sky-50 p-1.5 rounded text-center border border-sky-100">
+            <div className="text-xs font-semibold text-sky-600">{devzoneStats.totalSessions > 0 ? formatDuration(Math.round(devzoneStats.totalRuntime / devzoneStats.totalSessions)) : '0m'}</div>
+            <div className="text-xs text-sky-800">Avg Runtime</div>
+          </div>
+          <div className="bg-emerald-50 p-1.5 rounded text-center border border-emerald-100">
+            <div className="text-xs font-semibold text-emerald-600">{summaryStats.totalPeriods > 0 ? Math.round(devzoneStats.totalSessions / summaryStats.totalPeriods) : 0}</div>
+            <div className="text-xs text-emerald-800">Avg Sessions</div>
+          </div>
         </div>
 
         {/* Time Period and Analysis Controls Card */}
@@ -1012,7 +1099,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             {/* Time Period Controls */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Time Period:</span>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {timePeriodOptions.map((option) => (
                   <button
                     key={option.id}
@@ -1035,7 +1122,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             {/* Analysis Type Controls - wraps to next row on small screens */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Analysis:</span>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {viewOptions.map((option) => {
                   const Icon = option.icon
                   return (
@@ -1113,32 +1200,6 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             </div>
           )}
         </div>
-      </div>
-    )
-  }
-
-  // Non-embedded mode - render with full card structure
-  return (
-    <div className={`space-y-3 ${className}`}>
-      <Card className="p-3">
-        <div className="flex flex-col space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-5 w-5 text-blue-600" />
-              <h2 className="text-base font-semibold text-gray-900">{getPeriodLabel()} Statistics Analytics</h2>
-              <span className="text-sm text-gray-500">Analyze daily trends across users, projects, and organizations</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 min-w-0">
-            {/* Same filters as embedded mode */}
-          </div>
-        </div>
-        
-        {/* Same summary stats as embedded mode */}
-        
-        {/* Same chart section as embedded mode */}
-      </Card>
     </div>
   )
 }

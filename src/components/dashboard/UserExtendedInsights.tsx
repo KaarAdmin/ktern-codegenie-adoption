@@ -1025,7 +1025,7 @@ export function UserExtendedInsights({
           </div>
           
           {/* WeeklyStatsAnalytics Component */}
-          <WeeklyStatsAnalytics data={data} embedded={true} />
+          <WeeklyStatsAnalytics data={data} />
         </div>
       </Card>
 
