@@ -641,7 +641,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         })
         emailMapping = Object.entries(emailRuntimes)
           .sort(([, a], [, b]) => b - a)
-          .map(([email, minutes]) => `${email} (${minutes} min)`)
+          .map(([email, minutes]) => `${email} (${(minutes / 60).toFixed(2)} hrs)`)
       }
 
       return {
@@ -655,7 +655,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
                activeView === 'prompts' ? 'Total Prompts' :
                activeView === 'agenticTasks' ? 'Agentic Tasks' :
-               activeView === 'runtime' ? 'Runtime (minutes)' : 'Total Cost ($)',
+               activeView === 'runtime' ? 'Runtime' : 'Total Cost',
         emailMapping
       }
     })
@@ -711,7 +711,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                               activeView === 'cost' 
                                 ? `$${data.value.toFixed(2)}` 
                                 : activeView === 'runtime'
-                                ? `${data.value.toLocaleString()} min`
+                                ? `${(data.value / 60).toFixed(2)} hrs`
                                 : data.value.toLocaleString()
                             }
                           </div>
@@ -809,7 +809,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                             activeView === 'cost' 
                               ? `$${data.value.toFixed(2)}` 
                               : activeView === 'runtime'
-                              ? `${data.value.toLocaleString()} min`
+                              ? `${(data.value / 60).toFixed(2)} hrs`
                               : data.value.toLocaleString()
                           }
                         </div>
