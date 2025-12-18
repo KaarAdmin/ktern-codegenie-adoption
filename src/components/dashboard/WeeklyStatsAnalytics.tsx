@@ -655,7 +655,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
                activeView === 'prompts' ? 'Total Prompts' :
                activeView === 'agenticTasks' ? 'Agentic Tasks' :
-               activeView === 'runtime' ? 'Runtime' : 'Total Cost',
+               activeView === 'runtime' ? 'Runtime' : 'Total Cost ($)',
         emailMapping
       }
     })
