@@ -34,10 +34,9 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Timer
+  Clock
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
-import dayjs from 'dayjs'
 
 interface TimeSeriesAnalyticsProps {
   data: UserExtendedModel[]
@@ -53,6 +52,7 @@ interface TimeSeriesData {
   totalPrompts: number
   totalCost: number
   totalAgenticTasks: number
+  totalRuntime: number
   organizationBreakdown: { [key: string]: number }
   projectBreakdown: { [key: string]: number }
   buildspaceBreakdown: { [key: string]: number }
@@ -65,6 +65,16 @@ type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
 
+const formatRuntime = (minutes: number): { value: string; unit: string } => {
+  const hours = minutes / 60
+  if (hours < 1) {
+    return { value: Math.round(minutes).toString(), unit: 'min' }
+  }
+  return hours > 999 
+    ? { value: (hours / 1000).toFixed(2) + 'K', unit: 'hrs' }
+    : { value: hours.toFixed(2), unit: 'hrs' }
+}
+
 export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyticsProps) {
   const [activeView, setActiveView] = useState<ViewType>('activeUsers')
   const [chartType, setChartType] = useState<ChartType>('line')
@@ -73,7 +83,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedEmail, setSelectedEmail] = useState<string>('all')
   const [dataLimit, setDataLimit] = useState<number>(10)
-   
+  
   // Search states for dropdowns
   const [orgSearchTerm, setOrgSearchTerm] = useState<string>('')
   const [projectSearchTerm, setProjectSearchTerm] = useState<string>('')
@@ -163,8 +173,16 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     if (selectedProject !== 'all') {
       filteredData = filteredData.filter(item => item.projectName === selectedProject)
     }
-    const emailList = Array.from(new Set(filteredData.map(item => item.email))).sort()
-    return emailList
+    const emailSet = new Set<string>()
+    filteredData.forEach(item => {
+      if (item.email) emailSet.add(item.email)
+      if ((item as any).user_sessions) {
+        Object.values((item as any).user_sessions).forEach((session: any) => {
+          if (session.email) emailSet.add(session.email)
+        })
+      }
+    })
+    return Array.from(emailSet).sort()
   }, [data, selectedOrganization, selectedProject])
 
   // Filtered options with search
@@ -301,6 +319,39 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       )
       const totalAgenticTasks = uniqueAgenticTasks.size
 
+      // Calculate runtime: use devzone_total_runtime_minutes unless a specific user is selected
+      let totalRuntime = 0
+      if (selectedEmail === 'all') {
+        // Use devzone_total_runtime_minutes when no specific user is selected
+        periodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).devzone_total_runtime_minutes) {
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            
+            if (orgMatch && projectMatch) {
+              totalRuntime += Number((item as any).devzone_total_runtime_minutes)
+            }
+          }
+        })
+      } else {
+        // Use duration_minutes from user_sessions only when a specific user is selected
+        periodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+            Object.values((item as any).user_sessions).forEach((session: any) => {
+              if (session.email && session.duration_minutes) {
+                const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+                const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+                const emailMatch = session.email === selectedEmail
+                
+                if (orgMatch && projectMatch && emailMatch) {
+                  totalRuntime += Number(session.duration_minutes)
+                }
+              }
+            })
+          }
+        })
+      }
+
       const organizationBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
         organizationBreakdown[item.domain] = (organizationBreakdown[item.domain] || 0) + Number(item.cost)
@@ -334,6 +385,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         totalPrompts,
         totalCost,
         totalAgenticTasks,
+        totalRuntime,
         organizationBreakdown,
         projectBreakdown,
         buildspaceBreakdown,
@@ -341,31 +393,6 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       }
     })
   }, [data, selectedOrganization, selectedProject, selectedEmail, timePeriod, dataLimit])
-
-  // DevZone data processing from API data
-  const devzoneStats = useMemo(() => {
-    const devzoneData = data.filter(item => item.taskId === 'devzone_tracking')
-    const totalRuntime = devzoneData.reduce((sum, item) => {
-      const runtime = (item as any).devzone_total_runtime_minutes || 0
-      return sum + Number(runtime)
-    }, 0)
-    const totalSessions = devzoneData.reduce((sum, item) => {
-      const sessions = (item as any).user_sessions ? Object.keys((item as any).user_sessions).length : 0
-      return sum + sessions
-    }, 0)
-    
-    return { totalRuntime, totalSessions }
-  }, [data])
-
-  const formatDuration = (minutes: number) => {
-    if (!minutes || isNaN(minutes)) return '0m'
-    const hours = Math.floor(minutes / 60)
-    const mins = Math.round(minutes % 60)
-    if (hours > 0) {
-      return `${hours}h ${mins}m`
-    }
-    return `${mins}m`
-  }
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
@@ -380,9 +407,11 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         totalPrompts: 0,
         totalCost: 0,
         totalAgenticTasks: 0,
+        totalRuntime: 0,
         avgPeriodPrompts: 0,
         avgPeriodCost: 0,
         avgAgenticTasks: 0,
+        avgRuntime: 0,
         peakPeriod: 'N/A'
       }
     }
@@ -421,19 +450,44 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     const totalCost = timeSeriesData.reduce((sum, period) => sum + period.totalCost, 0)
     const totalAgenticTasks = new Set(filteredData.filter(item => item.taskId && item.taskId !== 'N/A').map(item => item.taskId!)).size
     
+    const totalRuntime = timeSeriesData.reduce((sum, period) => sum + period.totalRuntime, 0)
     const avgPeriodPrompts = totalPeriods > 0 ? totalPrompts / totalPeriods : 0
     const avgPeriodCost = totalPeriods > 0 ? totalCost / totalPeriods : 0
     const avgAgenticTasks = totalPeriods > 0 ? totalAgenticTasks / totalPeriods : 0
+    
+    let avgRuntime = 0
+    if (selectedEmail === 'all') {
+      const devzoneTrackingCount = filteredData.filter(item => item.taskId === 'devzone_tracking').length
+      avgRuntime = devzoneTrackingCount > 0 ? totalRuntime / devzoneTrackingCount : 0
+    } else {
+      let sessionCount = 0
+      data.forEach(item => {
+        if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+          Object.values((item as any).user_sessions).forEach((session: any) => {
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            const emailMatch = session.email === selectedEmail
+            
+            if (orgMatch && projectMatch && emailMatch && session.duration_minutes) {
+              sessionCount++
+            }
+          })
+        }
+      })
+      avgRuntime = sessionCount > 0 ? totalRuntime / sessionCount : 0
+    }
     
     const peakPeriod = timeSeriesData.length > 0 ? timeSeriesData.reduce((peak, period) => {
       const currentValue = activeView === 'activeUsers' ? period.activeUsers :
                           activeView === 'activeBuildspaces' ? period.activeBuildspaces :
                           activeView === 'prompts' ? period.totalPrompts : 
-                          activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost
+                          activeView === 'agenticTasks' ? period.totalAgenticTasks :
+                          activeView === 'runtime' ? period.totalRuntime : period.totalCost
       const peakValue = activeView === 'activeUsers' ? peak.activeUsers :
                        activeView === 'activeBuildspaces' ? peak.activeBuildspaces :
                        activeView === 'prompts' ? peak.totalPrompts : 
-                       activeView === 'agenticTasks' ? peak.totalAgenticTasks : peak.totalCost
+                       activeView === 'agenticTasks' ? peak.totalAgenticTasks :
+                       activeView === 'runtime' ? peak.totalRuntime : peak.totalCost
       return currentValue > peakValue ? period : peak
     }, timeSeriesData[0]) : { period: 'N/A' }
 
@@ -446,9 +500,11 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       totalPrompts,
       totalCost,
       totalAgenticTasks,
+      totalRuntime,
       avgPeriodPrompts: Math.round(avgPeriodPrompts),
       avgPeriodCost,
       avgAgenticTasks: Math.round(avgAgenticTasks),
+      avgRuntime: Math.round(avgRuntime),
       peakPeriod: peakPeriod?.period || 'N/A'
     }
   }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
@@ -459,7 +515,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     { id: 'prompts' as const, label: 'Prompt', icon: MessageSquare },
     { id: 'cost' as const, label: 'Cost', icon: DollarSign },
     { id: 'agenticTasks' as const, label: 'Agentic Task', icon: Activity },
-    { id: 'runtime' as const, label: 'Runtime', icon: Timer }
+    { id: 'runtime' as const, label: 'Runtime', icon: Clock }
   ]
 
   const chartTypeOptions = [
@@ -486,40 +542,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     }
   }
 
-  // DevZone chart data for runtime view from API data
-  const devzoneChartData = useMemo(() => {
-    const devzoneData = data.filter(item => item.taskId === 'devzone_tracking')
-    const dateMap = new Map<string, number>()
-    
-    devzoneData.forEach(item => {
-      const normalizedDate = dayjs(item.date).format('YYYY-MM-DD')
-      const currentDuration = dateMap.get(normalizedDate) || 0
-      const runtime = (item as any).devzone_total_runtime_minutes || 0
-      dateMap.set(normalizedDate, currentDuration + Number(runtime))
-    })
-
-    // If no devzone data, create empty data points based on timeSeriesData periods
-    if (dateMap.size === 0 && timeSeriesData.length > 0) {
-      return timeSeriesData.map(period => ({
-        week: period.period,
-        value: 0,
-        label: 'Runtime (minutes)',
-        emailMapping: []
-      }))
-    }
-
-    const sortedDates = Array.from(dateMap.keys()).sort()
-    return sortedDates.map(date => ({
-      week: dayjs(date).format('MMM DD, YYYY'),
-      value: dateMap.get(date) || 0,
-      label: 'Runtime (minutes)',
-      emailMapping: []
-    }))
-  }, [data, timeSeriesData])
-
   const chartData = useMemo(() => {
-    if (activeView === 'runtime') return devzoneChartData
-    
     return timeSeriesData.map(period => {
       // Get the period data with filters applied
       const periodStart = parseISO(period.periodStart)
@@ -529,9 +552,6 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         try {
           const itemDate = parseISO(item.date)
           if (!isValid(itemDate)) return false
-          
-          // Exclude devzone_tracking for non-runtime views
-          if (item.taskId === 'devzone_tracking') return false
           
           const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
           const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
@@ -586,6 +606,42 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             .filter(item => item.taskId && item.taskId !== 'N/A')
             .map(item => item.email)
         ))
+      } else if (activeView === 'runtime') {
+        // Group by email and sum runtime from user_sessions
+        const emailRuntimes: Record<string, number> = {}
+        
+        // Get all devzone_tracking items in the period (without email filter)
+        const allPeriodData = data.filter(item => {
+          try {
+            const itemDate = parseISO(item.date)
+            if (!isValid(itemDate)) return false
+            
+            const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            
+            return dateMatch && orgMatch && projectMatch
+          } catch {
+            return false
+          }
+        })
+        
+        // Always use duration_minutes from user_sessions for per-user breakdown in tooltip
+        allPeriodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+            Object.values((item as any).user_sessions).forEach((session: any) => {
+              if (session.email && session.duration_minutes) {
+                // Apply email filter here if needed
+                if (selectedEmail === 'all' || session.email === selectedEmail) {
+                  emailRuntimes[session.email] = (emailRuntimes[session.email] || 0) + Number(session.duration_minutes)
+                }
+              }
+            })
+          }
+        })
+        emailMapping = Object.entries(emailRuntimes)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, minutes]) => `${email} (${minutes} min)`)
       }
 
       return {
@@ -593,15 +649,17 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         value: activeView === 'activeUsers' ? period.activeUsers :
                activeView === 'activeBuildspaces' ? period.activeBuildspaces :
                activeView === 'prompts' ? period.totalPrompts :
-               activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost,
+               activeView === 'agenticTasks' ? period.totalAgenticTasks :
+               activeView === 'runtime' ? period.totalRuntime : period.totalCost,
         label: activeView === 'activeUsers' ? 'Active Users' :
                activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
                activeView === 'prompts' ? 'Total Prompts' :
-               activeView === 'agenticTasks' ? 'Agentic Tasks' : 'Total Cost ($)',
+               activeView === 'agenticTasks' ? 'Agentic Tasks' :
+               activeView === 'runtime' ? 'Runtime (minutes)' : 'Total Cost ($)',
         emailMapping
       }
     })
-  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail, devzoneChartData])
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
 
   const renderChart = () => {
     const chartWidth = Math.max(800, chartData.length * 80)
@@ -628,7 +686,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                       return `$${value}`
                     }
                     if (activeView === 'runtime') {
-                      return formatDuration(value)
+                      return value > 60 ? `${(value / 60).toFixed(1)} Hrs` : `${value} min`
                     }
                     return value.toLocaleString()
                   }}
@@ -653,7 +711,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                               activeView === 'cost' 
                                 ? `$${data.value.toFixed(2)}` 
                                 : activeView === 'runtime'
-                                ? formatDuration(data.value)
+                                ? `${data.value.toLocaleString()} min`
                                 : data.value.toLocaleString()
                             }
                           </div>
@@ -664,6 +722,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                                  activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
                                  activeView === 'prompts' ? 'Users by Prompt Count:' :
                                  activeView === 'cost' ? 'Users by Cost:' :
+                                 activeView === 'runtime' ? 'Users by Runtime:' :
                                  'Users by Task Count:'}
                               </div>
                               <div className="text-xs space-y-1">
@@ -725,7 +784,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                     return `$${value}`
                   }
                   if (activeView === 'runtime') {
-                    return formatDuration(value)
+                    return value > 60 ? `${(value / 60).toFixed(1)} HRS` : `${value} min`
                   }
                   return value.toLocaleString()
                 }}
@@ -750,7 +809,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                             activeView === 'cost' 
                               ? `$${data.value.toFixed(2)}` 
                               : activeView === 'runtime'
-                              ? formatDuration(data.value)
+                              ? `${data.value.toLocaleString()} min`
                               : data.value.toLocaleString()
                           }
                         </div>
@@ -761,6 +820,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                                activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
                                activeView === 'prompts' ? 'Users by Prompt Count:' :
                                activeView === 'cost' ? 'Users by Cost:' :
+                               activeView === 'runtime' ? 'Users by Runtime:' :
                                'Users by Task Count:'}
                             </div>
                             <div className="text-xs space-y-1">
@@ -1022,7 +1082,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         </div>
 
         {/* Summary Stats Grid */}
-        <div className="mt-4 grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-2">
+        <div className="mt-4 grid grid-cols-3 md:grid-cols-7 lg:grid-cols-7 gap-2">
           <div className="bg-blue-50 p-2 rounded text-center border border-blue-100">
             <div className="text-base font-bold text-blue-600">{summaryStats.totalPeriods}</div>
             <div className="text-xs text-blue-800">Total Periods</div>
@@ -1047,18 +1107,14 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             <div className="text-base font-bold text-indigo-600">{summaryStats.totalAgenticTasks}</div>
             <div className="text-xs text-indigo-800">Agentic Tasks</div>
           </div>
-          <div className="bg-sky-50 p-2 rounded text-center border border-sky-100">
-            <div className="text-base font-bold text-sky-600">{formatDuration(devzoneStats.totalRuntime)}</div>
-            <div className="text-xs text-sky-800">Total Runtime</div>
-          </div>
-          <div className="bg-emerald-50 p-2 rounded text-center border border-emerald-100">
-            <div className="text-base font-bold text-emerald-600">{devzoneStats.totalSessions}</div>
-            <div className="text-xs text-emerald-800">Total Sessions</div>
+          <div className="bg-teal-50 p-2 rounded text-center border border-teal-100">
+            <div className="text-base font-bold text-teal-600">{formatRuntime(summaryStats.totalRuntime).value} {formatRuntime(summaryStats.totalRuntime).unit}</div>
+            <div className="text-xs text-teal-800">Total Runtime</div>
           </div>
         </div>
 
         {/* Average Stats Grid */}
-        <div className="mt-2 grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-2">
+        <div className="mt-2 grid grid-cols-3 md:grid-cols-7 lg:grid-cols-7 gap-2">
           <div className="bg-slate-50 p-1.5 rounded text-center border border-slate-100">
             <div className="text-xs font-semibold text-slate-600">{summaryStats.peakPeriod.slice(0, 12)}...</div>
             <div className="text-xs text-slate-800">Peak Period</div>
@@ -1083,13 +1139,9 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             <div className="text-xs font-semibold text-cyan-600">{summaryStats.avgAgenticTasks}</div>
             <div className="text-xs text-cyan-800">Avg Tasks</div>
           </div>
-          <div className="bg-sky-50 p-1.5 rounded text-center border border-sky-100">
-            <div className="text-xs font-semibold text-sky-600">{devzoneStats.totalSessions > 0 ? formatDuration(Math.round(devzoneStats.totalRuntime / devzoneStats.totalSessions)) : '0m'}</div>
-            <div className="text-xs text-sky-800">Avg Runtime</div>
-          </div>
           <div className="bg-emerald-50 p-1.5 rounded text-center border border-emerald-100">
-            <div className="text-xs font-semibold text-emerald-600">{summaryStats.totalPeriods > 0 ? Math.round(devzoneStats.totalSessions / summaryStats.totalPeriods) : 0}</div>
-            <div className="text-xs text-emerald-800">Avg Sessions</div>
+            <div className="text-xs font-semibold text-emerald-600">{formatRuntime(summaryStats.avgRuntime).value} {formatRuntime(summaryStats.avgRuntime).unit}</div>
+            <div className="text-xs text-emerald-800">Avg Runtime</div>
           </div>
         </div>
 
@@ -1099,7 +1151,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             {/* Time Period Controls */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Time Period:</span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex gap-1">
                 {timePeriodOptions.map((option) => (
                   <button
                     key={option.id}
@@ -1122,7 +1174,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             {/* Analysis Type Controls - wraps to next row on small screens */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Analysis:</span>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex gap-1">
                 {viewOptions.map((option) => {
                   const Icon = option.icon
                   return (
