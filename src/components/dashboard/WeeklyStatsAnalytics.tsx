@@ -33,14 +33,14 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  Clock
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
 
 interface TimeSeriesAnalyticsProps {
   data: UserExtendedModel[]
   className?: string
-  embedded?: boolean
 }
 
 interface TimeSeriesData {
@@ -52,19 +52,30 @@ interface TimeSeriesData {
   totalPrompts: number
   totalCost: number
   totalAgenticTasks: number
+  totalRuntime: number
   organizationBreakdown: { [key: string]: number }
   projectBreakdown: { [key: string]: number }
   buildspaceBreakdown: { [key: string]: number }
   agenticTaskBreakdown: { [key: string]: number }
 }
 
-type ViewType = 'activeUsers' | 'activeBuildspaces' | 'prompts' | 'cost' | 'agenticTasks'
+type ViewType = 'activeUsers' | 'activeBuildspaces' | 'prompts' | 'cost' | 'agenticTasks' | 'runtime'
 type ChartType = 'line' | 'bar'
 type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
 
-export function WeeklyStatsAnalytics({ data, className = '', embedded = false }: TimeSeriesAnalyticsProps) {
+const formatRuntime = (minutes: number): { value: string; unit: string } => {
+  const hours = minutes / 60
+  if (hours < 1) {
+    return { value: Math.round(minutes).toString(), unit: 'min' }
+  }
+  return hours > 999 
+    ? { value: (hours / 1000).toFixed(2) + 'K', unit: 'hrs' }
+    : { value: hours.toFixed(2), unit: 'hrs' }
+}
+
+export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyticsProps) {
   const [activeView, setActiveView] = useState<ViewType>('activeUsers')
   const [chartType, setChartType] = useState<ChartType>('line')
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('daily')
@@ -162,8 +173,16 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     if (selectedProject !== 'all') {
       filteredData = filteredData.filter(item => item.projectName === selectedProject)
     }
-    const emailList = Array.from(new Set(filteredData.map(item => item.email))).sort()
-    return emailList
+    const emailSet = new Set<string>()
+    filteredData.forEach(item => {
+      if (item.email) emailSet.add(item.email)
+      if ((item as any).user_sessions) {
+        Object.values((item as any).user_sessions).forEach((session: any) => {
+          if (session.email) emailSet.add(session.email)
+        })
+      }
+    })
+    return Array.from(emailSet).sort()
   }, [data, selectedOrganization, selectedProject])
 
   // Filtered options with search
@@ -300,6 +319,39 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
       )
       const totalAgenticTasks = uniqueAgenticTasks.size
 
+      // Calculate runtime: use devzone_total_runtime_minutes unless a specific user is selected
+      let totalRuntime = 0
+      if (selectedEmail === 'all') {
+        // Use devzone_total_runtime_minutes when no specific user is selected
+        periodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).devzone_total_runtime_minutes) {
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            
+            if (orgMatch && projectMatch) {
+              totalRuntime += Number((item as any).devzone_total_runtime_minutes)
+            }
+          }
+        })
+      } else {
+        // Use duration_minutes from user_sessions only when a specific user is selected
+        periodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+            Object.values((item as any).user_sessions).forEach((session: any) => {
+              if (session.email && session.duration_minutes) {
+                const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+                const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+                const emailMatch = session.email === selectedEmail
+                
+                if (orgMatch && projectMatch && emailMatch) {
+                  totalRuntime += Number(session.duration_minutes)
+                }
+              }
+            })
+          }
+        })
+      }
+
       const organizationBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
         organizationBreakdown[item.domain] = (organizationBreakdown[item.domain] || 0) + Number(item.cost)
@@ -333,6 +385,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         totalPrompts,
         totalCost,
         totalAgenticTasks,
+        totalRuntime,
         organizationBreakdown,
         projectBreakdown,
         buildspaceBreakdown,
@@ -354,9 +407,11 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         totalPrompts: 0,
         totalCost: 0,
         totalAgenticTasks: 0,
+        totalRuntime: 0,
         avgPeriodPrompts: 0,
         avgPeriodCost: 0,
         avgAgenticTasks: 0,
+        avgRuntime: 0,
         peakPeriod: 'N/A'
       }
     }
@@ -395,19 +450,44 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     const totalCost = timeSeriesData.reduce((sum, period) => sum + period.totalCost, 0)
     const totalAgenticTasks = new Set(filteredData.filter(item => item.taskId && item.taskId !== 'N/A').map(item => item.taskId!)).size
     
+    const totalRuntime = timeSeriesData.reduce((sum, period) => sum + period.totalRuntime, 0)
     const avgPeriodPrompts = totalPeriods > 0 ? totalPrompts / totalPeriods : 0
     const avgPeriodCost = totalPeriods > 0 ? totalCost / totalPeriods : 0
     const avgAgenticTasks = totalPeriods > 0 ? totalAgenticTasks / totalPeriods : 0
+    
+    let avgRuntime = 0
+    if (selectedEmail === 'all') {
+      const devzoneTrackingCount = filteredData.filter(item => item.taskId === 'devzone_tracking').length
+      avgRuntime = devzoneTrackingCount > 0 ? totalRuntime / devzoneTrackingCount : 0
+    } else {
+      let sessionCount = 0
+      data.forEach(item => {
+        if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+          Object.values((item as any).user_sessions).forEach((session: any) => {
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            const emailMatch = session.email === selectedEmail
+            
+            if (orgMatch && projectMatch && emailMatch && session.duration_minutes) {
+              sessionCount++
+            }
+          })
+        }
+      })
+      avgRuntime = sessionCount > 0 ? totalRuntime / sessionCount : 0
+    }
     
     const peakPeriod = timeSeriesData.length > 0 ? timeSeriesData.reduce((peak, period) => {
       const currentValue = activeView === 'activeUsers' ? period.activeUsers :
                           activeView === 'activeBuildspaces' ? period.activeBuildspaces :
                           activeView === 'prompts' ? period.totalPrompts : 
-                          activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost
+                          activeView === 'agenticTasks' ? period.totalAgenticTasks :
+                          activeView === 'runtime' ? period.totalRuntime : period.totalCost
       const peakValue = activeView === 'activeUsers' ? peak.activeUsers :
                        activeView === 'activeBuildspaces' ? peak.activeBuildspaces :
                        activeView === 'prompts' ? peak.totalPrompts : 
-                       activeView === 'agenticTasks' ? peak.totalAgenticTasks : peak.totalCost
+                       activeView === 'agenticTasks' ? peak.totalAgenticTasks :
+                       activeView === 'runtime' ? peak.totalRuntime : peak.totalCost
       return currentValue > peakValue ? period : peak
     }, timeSeriesData[0]) : { period: 'N/A' }
 
@@ -420,9 +500,11 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
       totalPrompts,
       totalCost,
       totalAgenticTasks,
+      totalRuntime,
       avgPeriodPrompts: Math.round(avgPeriodPrompts),
       avgPeriodCost,
       avgAgenticTasks: Math.round(avgAgenticTasks),
+      avgRuntime: Math.round(avgRuntime),
       peakPeriod: peakPeriod?.period || 'N/A'
     }
   }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
@@ -432,7 +514,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     { id: 'activeBuildspaces' as const, label: 'Buildspace', icon: Layers },
     { id: 'prompts' as const, label: 'Prompt', icon: MessageSquare },
     { id: 'cost' as const, label: 'Cost', icon: DollarSign },
-    { id: 'agenticTasks' as const, label: 'Agentic Task', icon: Activity }
+    { id: 'agenticTasks' as const, label: 'Agentic Task', icon: Activity },
+    { id: 'runtime' as const, label: 'Runtime', icon: Clock }
   ]
 
   const chartTypeOptions = [
@@ -523,6 +606,42 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             .filter(item => item.taskId && item.taskId !== 'N/A')
             .map(item => item.email)
         ))
+      } else if (activeView === 'runtime') {
+        // Group by email and sum runtime from user_sessions
+        const emailRuntimes: Record<string, number> = {}
+        
+        // Get all devzone_tracking items in the period (without email filter)
+        const allPeriodData = data.filter(item => {
+          try {
+            const itemDate = parseISO(item.date)
+            if (!isValid(itemDate)) return false
+            
+            const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            
+            return dateMatch && orgMatch && projectMatch
+          } catch {
+            return false
+          }
+        })
+        
+        // Always use duration_minutes from user_sessions for per-user breakdown in tooltip
+        allPeriodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
+            Object.values((item as any).user_sessions).forEach((session: any) => {
+              if (session.email && session.duration_minutes) {
+                // Apply email filter here if needed
+                if (selectedEmail === 'all' || session.email === selectedEmail) {
+                  emailRuntimes[session.email] = (emailRuntimes[session.email] || 0) + Number(session.duration_minutes)
+                }
+              }
+            })
+          }
+        })
+        emailMapping = Object.entries(emailRuntimes)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, minutes]) => `${email} (${(minutes / 60).toFixed(2)} hrs)`)
       }
 
       return {
@@ -530,11 +649,13 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         value: activeView === 'activeUsers' ? period.activeUsers :
                activeView === 'activeBuildspaces' ? period.activeBuildspaces :
                activeView === 'prompts' ? period.totalPrompts :
-               activeView === 'agenticTasks' ? period.totalAgenticTasks : period.totalCost,
+               activeView === 'agenticTasks' ? period.totalAgenticTasks :
+               activeView === 'runtime' ? period.totalRuntime : period.totalCost,
         label: activeView === 'activeUsers' ? 'Active Users' :
                activeView === 'activeBuildspaces' ? 'Active Buildspaces' :
                activeView === 'prompts' ? 'Total Prompts' :
-               activeView === 'agenticTasks' ? 'Agentic Tasks' : 'Total Cost ($)',
+               activeView === 'agenticTasks' ? 'Agentic Tasks' :
+               activeView === 'runtime' ? 'Runtime' : 'Total Cost ($)',
         emailMapping
       }
     })
@@ -564,6 +685,9 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                     if (activeView === 'cost') {
                       return `$${value}`
                     }
+                    if (activeView === 'runtime') {
+                      return value > 60 ? `${(value / 60).toFixed(1)} Hrs` : `${value} min`
+                    }
                     return value.toLocaleString()
                   }}
                 />
@@ -586,6 +710,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                             <span className="font-medium">{data.label}:</span> {
                               activeView === 'cost' 
                                 ? `$${data.value.toFixed(2)}` 
+                                : activeView === 'runtime'
+                                ? `${(data.value / 60).toFixed(2)} hrs`
                                 : data.value.toLocaleString()
                             }
                           </div>
@@ -596,6 +722,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                                  activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
                                  activeView === 'prompts' ? 'Users by Prompt Count:' :
                                  activeView === 'cost' ? 'Users by Cost:' :
+                                 activeView === 'runtime' ? 'Users by Runtime:' :
                                  'Users by Task Count:'}
                               </div>
                               <div className="text-xs space-y-1">
@@ -656,6 +783,9 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                   if (activeView === 'cost') {
                     return `$${value}`
                   }
+                  if (activeView === 'runtime') {
+                    return value > 60 ? `${(value / 60).toFixed(1)} HRS` : `${value} min`
+                  }
                   return value.toLocaleString()
                 }}
               />
@@ -678,6 +808,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                           <span className="font-medium">{data.label}:</span> {
                             activeView === 'cost' 
                               ? `$${data.value.toFixed(2)}` 
+                              : activeView === 'runtime'
+                              ? `${(data.value / 60).toFixed(2)} hrs`
                               : data.value.toLocaleString()
                           }
                         </div>
@@ -688,6 +820,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
                                activeView === 'activeBuildspaces' ? 'Users with Buildspaces:' :
                                activeView === 'prompts' ? 'Users by Prompt Count:' :
                                activeView === 'cost' ? 'Users by Cost:' :
+                               activeView === 'runtime' ? 'Users by Runtime:' :
                                'Users by Task Count:'}
                             </div>
                             <div className="text-xs space-y-1">
@@ -732,10 +865,8 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
     )
   }
 
-  // When embedded, render without the outer card structure
-  if (embedded) {
-    return (
-      <div className={`space-y-3 ${className}`}>
+  return (
+    <div className={`space-y-3 ${className}`}>
         {/* Filters Row */}
         <div className="flex items-center gap-2 min-w-0">
           {/* Organization Filter */}
@@ -951,7 +1082,7 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
         </div>
 
         {/* Summary Stats Grid */}
-        <div className="mt-4 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+        <div className="mt-4 grid grid-cols-3 md:grid-cols-7 lg:grid-cols-7 gap-2">
           <div className="bg-blue-50 p-2 rounded text-center border border-blue-100">
             <div className="text-base font-bold text-blue-600">{summaryStats.totalPeriods}</div>
             <div className="text-xs text-blue-800">Total Periods</div>
@@ -976,10 +1107,14 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             <div className="text-base font-bold text-indigo-600">{summaryStats.totalAgenticTasks}</div>
             <div className="text-xs text-indigo-800">Agentic Tasks</div>
           </div>
+          <div className="bg-teal-50 p-2 rounded text-center border border-teal-100">
+            <div className="text-base font-bold text-teal-600">{formatRuntime(summaryStats.totalRuntime).value} {formatRuntime(summaryStats.totalRuntime).unit}</div>
+            <div className="text-xs text-teal-800">Total Runtime</div>
+          </div>
         </div>
 
         {/* Average Stats Grid */}
-        <div className="mt-2 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+        <div className="mt-2 grid grid-cols-3 md:grid-cols-7 lg:grid-cols-7 gap-2">
           <div className="bg-slate-50 p-1.5 rounded text-center border border-slate-100">
             <div className="text-xs font-semibold text-slate-600">{summaryStats.peakPeriod.slice(0, 12)}...</div>
             <div className="text-xs text-slate-800">Peak Period</div>
@@ -1003,6 +1138,10 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
           <div className="bg-cyan-50 p-1.5 rounded text-center border border-cyan-100">
             <div className="text-xs font-semibold text-cyan-600">{summaryStats.avgAgenticTasks}</div>
             <div className="text-xs text-cyan-800">Avg Tasks</div>
+          </div>
+          <div className="bg-emerald-50 p-1.5 rounded text-center border border-emerald-100">
+            <div className="text-xs font-semibold text-emerald-600">{formatRuntime(summaryStats.avgRuntime).value} {formatRuntime(summaryStats.avgRuntime).unit}</div>
+            <div className="text-xs text-emerald-800">Avg Runtime</div>
           </div>
         </div>
 
@@ -1113,32 +1252,6 @@ export function WeeklyStatsAnalytics({ data, className = '', embedded = false }:
             </div>
           )}
         </div>
-      </div>
-    )
-  }
-
-  // Non-embedded mode - render with full card structure
-  return (
-    <div className={`space-y-3 ${className}`}>
-      <Card className="p-3">
-        <div className="flex flex-col space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-5 w-5 text-blue-600" />
-              <h2 className="text-base font-semibold text-gray-900">{getPeriodLabel()} Statistics Analytics</h2>
-              <span className="text-sm text-gray-500">Analyze daily trends across users, projects, and organizations</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 min-w-0">
-            {/* Same filters as embedded mode */}
-          </div>
-        </div>
-        
-        {/* Same summary stats as embedded mode */}
-        
-        {/* Same chart section as embedded mode */}
-      </Card>
     </div>
   )
 }
