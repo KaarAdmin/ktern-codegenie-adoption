@@ -176,11 +176,6 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     const emailSet = new Set<string>()
     filteredData.forEach(item => {
       if (item.email) emailSet.add(item.email)
-      if ((item as any).user_sessions) {
-        Object.values((item as any).user_sessions).forEach((session: any) => {
-          if (session.email) emailSet.add(session.email)
-        })
-      }
     })
     return Array.from(emailSet).sort()
   }, [data, selectedOrganization, selectedProject])
@@ -309,8 +304,8 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       
       const activeUsers = activeUsersSet.size
       const activeBuildspaces = activeBuildspacesSet.size
-      const totalPrompts = filteredPeriodData.reduce((sum, item) => sum + Number(item.usageCount), 0)
-      const totalCost = filteredPeriodData.reduce((sum, item) => sum + Number(item.cost), 0)
+      const totalPrompts = filteredPeriodData.reduce((sum, item) => sum + (Number(item.usageCount) || 0), 0)
+      const totalCost = filteredPeriodData.reduce((sum, item) => sum + (Number(item.cost) || 0), 0)
       
       const uniqueAgenticTasks = new Set(
         filteredPeriodData
@@ -319,60 +314,61 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       )
       const totalAgenticTasks = uniqueAgenticTasks.size
 
-      // Calculate runtime: use devzone_total_runtime_minutes unless a specific user is selected
+      // Calculate runtime based on API structure
       let totalRuntime = 0
       if (selectedEmail === 'all') {
-        // Use devzone_total_runtime_minutes when no specific user is selected
+        // Sum all runtime: devzone_total_runtime_minutes OR individual duration_minutes
         periodData.forEach(item => {
-          if (item.taskId === 'devzone_tracking' && (item as any).devzone_total_runtime_minutes) {
+          if (item.taskId === 'devzone_tracking') {
             const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
             const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
             
             if (orgMatch && projectMatch) {
-              totalRuntime += Number((item as any).devzone_total_runtime_minutes)
+              if ((item as any).devzone_total_runtime_minutes) {
+                totalRuntime += Number((item as any).devzone_total_runtime_minutes)
+              }
+              else if ((item as any).duration_minutes) {
+                totalRuntime += Number((item as any).duration_minutes)
+              }
             }
           }
         })
       } else {
-        // Use duration_minutes from user_sessions only when a specific user is selected
+        // Filter by specific user
         periodData.forEach(item => {
-          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
-            Object.values((item as any).user_sessions).forEach((session: any) => {
-              if (session.email && session.duration_minutes) {
-                const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-                const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
-                const emailMatch = session.email === selectedEmail
-                
-                if (orgMatch && projectMatch && emailMatch) {
-                  totalRuntime += Number(session.duration_minutes)
-                }
-              }
-            })
+          if (item.taskId === 'devzone_tracking') {
+            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
+            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            const emailMatch = item.email === selectedEmail
+            
+            if (orgMatch && projectMatch && emailMatch && (item as any).duration_minutes) {
+              totalRuntime += Number((item as any).duration_minutes)
+            }
           }
         })
       }
 
       const organizationBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
-        organizationBreakdown[item.domain] = (organizationBreakdown[item.domain] || 0) + Number(item.cost)
+        organizationBreakdown[item.domain] = (organizationBreakdown[item.domain] || 0) + (Number(item.cost) || 0)
       })
 
       const projectBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
-        projectBreakdown[item.projectName] = (projectBreakdown[item.projectName] || 0) + Number(item.cost)
+        projectBreakdown[item.projectName] = (projectBreakdown[item.projectName] || 0) + (Number(item.cost) || 0)
       })
 
       const buildspaceBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
         if (item.buildSpaceId && item.buildSpaceId !== 'N/A') {
-          buildspaceBreakdown[item.buildSpaceId] = (buildspaceBreakdown[item.buildSpaceId] || 0) + Number(item.cost)
+          buildspaceBreakdown[item.buildSpaceId] = (buildspaceBreakdown[item.buildSpaceId] || 0) + (Number(item.cost) || 0)
         }
       })
 
       const agenticTaskBreakdown: { [key: string]: number } = {}
       filteredPeriodData.forEach(item => {
         if (item.taskId && item.taskId !== 'N/A') {
-          agenticTaskBreakdown[item.taskId] = (agenticTaskBreakdown[item.taskId] || 0) + Number(item.cost)
+          agenticTaskBreakdown[item.taskId] = (agenticTaskBreakdown[item.taskId] || 0) + (Number(item.cost) || 0)
         }
       })
 
@@ -456,37 +452,22 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     const avgAgenticTasks = totalPeriods > 0 ? totalAgenticTasks / totalPeriods : 0
     
     let avgRuntime = 0
-    if (selectedEmail === 'all') {
-      const devzoneTrackingCount = filteredData.filter(item => item.taskId === 'devzone_tracking').length
-      avgRuntime = devzoneTrackingCount > 0 ? totalRuntime / devzoneTrackingCount : 0
-    } else {
-      let sessionCount = 0
-      data.forEach(item => {
-        if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
-          Object.values((item as any).user_sessions).forEach((session: any) => {
-            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
-            const emailMatch = session.email === selectedEmail
-            
-            if (orgMatch && projectMatch && emailMatch && session.duration_minutes) {
-              sessionCount++
-            }
-          })
-        }
-      })
-      avgRuntime = sessionCount > 0 ? totalRuntime / sessionCount : 0
-    }
+    const devzoneTrackingCount = filteredData.filter(item => 
+      item.taskId === 'devzone_tracking' && 
+      ((item as any).devzone_total_runtime_minutes || (item as any).duration_minutes)
+    ).length
+    avgRuntime = devzoneTrackingCount > 0 ? totalRuntime / devzoneTrackingCount : 0
     
     const peakPeriod = timeSeriesData.length > 0 ? timeSeriesData.reduce((peak, period) => {
       const currentValue = activeView === 'activeUsers' ? period.activeUsers :
                           activeView === 'activeBuildspaces' ? period.activeBuildspaces :
                           activeView === 'prompts' ? period.totalPrompts : 
-                          activeView === 'agenticTasks' ? period.totalAgenticTasks :
+                          activeView === 'agenticTasks' ? period.totalAgenticTasks : 
                           activeView === 'runtime' ? period.totalRuntime : period.totalCost
       const peakValue = activeView === 'activeUsers' ? peak.activeUsers :
                        activeView === 'activeBuildspaces' ? peak.activeBuildspaces :
                        activeView === 'prompts' ? peak.totalPrompts : 
-                       activeView === 'agenticTasks' ? peak.totalAgenticTasks :
+                       activeView === 'agenticTasks' ? peak.totalAgenticTasks : 
                        activeView === 'runtime' ? peak.totalRuntime : peak.totalCost
       return currentValue > peakValue ? period : peak
     }, timeSeriesData[0]) : { period: 'N/A' }
@@ -582,7 +563,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       } else if (activeView === 'prompts') {
         // Group by email and sum prompts, then sort
         const emailPrompts = periodData.reduce((acc, item) => {
-          acc[item.email] = (acc[item.email] || 0) + Number(item.usageCount)
+          acc[item.email] = (acc[item.email] || 0) + (Number(item.usageCount) || 0)
           return acc
         }, {} as Record<string, number>)
         
@@ -592,7 +573,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       } else if (activeView === 'cost') {
         // Group by email and sum cost, then sort
         const emailCosts = periodData.reduce((acc, item) => {
-          acc[item.email] = (acc[item.email] || 0) + Number(item.cost)
+          acc[item.email] = (acc[item.email] || 0) + (Number(item.cost) || 0)
           return acc
         }, {} as Record<string, number>)
         
@@ -607,41 +588,18 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             .map(item => item.email)
         ))
       } else if (activeView === 'runtime') {
-        // Group by email and sum runtime from user_sessions
+        // Group by email and sum runtime
         const emailRuntimes: Record<string, number> = {}
         
-        // Get all devzone_tracking items in the period (without email filter)
-        const allPeriodData = data.filter(item => {
-          try {
-            const itemDate = parseISO(item.date)
-            if (!isValid(itemDate)) return false
-            
-            const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
-            const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
-            
-            return dateMatch && orgMatch && projectMatch
-          } catch {
-            return false
+        periodData.forEach(item => {
+          if (item.taskId === 'devzone_tracking' && item.email && (item as any).duration_minutes) {
+            emailRuntimes[item.email] = (emailRuntimes[item.email] || 0) + Number((item as any).duration_minutes)
           }
         })
         
-        // Always use duration_minutes from user_sessions for per-user breakdown in tooltip
-        allPeriodData.forEach(item => {
-          if (item.taskId === 'devzone_tracking' && (item as any).user_sessions) {
-            Object.values((item as any).user_sessions).forEach((session: any) => {
-              if (session.email && session.duration_minutes) {
-                // Apply email filter here if needed
-                if (selectedEmail === 'all' || session.email === selectedEmail) {
-                  emailRuntimes[session.email] = (emailRuntimes[session.email] || 0) + Number(session.duration_minutes)
-                }
-              }
-            })
-          }
-        })
         emailMapping = Object.entries(emailRuntimes)
           .sort(([, a], [, b]) => b - a)
-          .map(([email, minutes]) => `${email} (${(minutes / 60).toFixed(2)} hrs)`)
+          .map(([email, minutes]) => `${email} (${minutes > 60 ? `${(minutes / 60).toFixed(2)} hrs` : `${Math.round(minutes)} min`})`)
       }
 
       return {
@@ -711,7 +669,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                               activeView === 'cost' 
                                 ? `$${data.value.toFixed(2)}` 
                                 : activeView === 'runtime'
-                                ? `${(data.value / 60).toFixed(2)} hrs`
+                                ? data.value > 60 ? `${(data.value / 60).toFixed(2)} hrs` : `${Math.round(data.value)} min`
                                 : data.value.toLocaleString()
                             }
                           </div>
@@ -809,7 +767,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
                             activeView === 'cost' 
                               ? `$${data.value.toFixed(2)}` 
                               : activeView === 'runtime'
-                              ? `${(data.value / 60).toFixed(2)} hrs`
+                              ? data.value > 60 ? `${(data.value / 60).toFixed(2)} hrs` : `${Math.round(data.value)} min`
                               : data.value.toLocaleString()
                           }
                         </div>
