@@ -1105,11 +1105,11 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
 
         {/* Time Period and Analysis Controls Card */}
         <div className="rounded-lg border bg-white p-6 shadow-sm p-4">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-4 pb-3 border-b border-gray-200 min-w-0">
+          <div className="flex flex-wrap gap-4 mb-4 pb-3 border-b border-gray-200">
             {/* Time Period Controls */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Time Period:</span>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {timePeriodOptions.map((option) => (
                   <button
                     key={option.id}
@@ -1130,9 +1130,9 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             <div className="hidden lg:block w-px h-8 bg-gray-300"></div>
             
             {/* Analysis Type Controls - wraps to next row on small screens */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Analysis:</span>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {viewOptions.map((option) => {
                   const Icon = option.icon
                   return (
