@@ -835,7 +835,7 @@ export function UserExtendedInsights({
       valueGetter: (params) => {
         if (!params.data) return 0
         if (params.data.taskId === 'devzone_tracking') {
-          return Number((params.data as any).devzone_total_runtime_minutes || 0)
+          return Number((params.data as any).devzone_total_runtime_minutes || (params.data as any).duration_minutes || 0)
         }
         return 0
       },
