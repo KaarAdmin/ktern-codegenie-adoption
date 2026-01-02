@@ -128,23 +128,23 @@ export function UserExtendedInsights({
       }
     }
 
-    const uniqueDomains = new Set(data.map(item => item.domain))
-    const uniqueProjects = new Set(data.map(item => item.projectId))
+    const uniqueDomains = new Set(data.map(item => item.domain).filter(Boolean))
+    const uniqueProjects = new Set(data.map(item => item.projectId).filter(Boolean))
     const uniqueBuildspaces = new Set(data.filter(item => item.buildSpaceId).map(item => item.buildSpaceId))
-    const uniqueUsers = new Set(data.map(item => item.email))
-    const uniqueTaskIds = new Set(data.map(item => item.taskId))
+    const uniqueUsers = new Set(data.map(item => item.email).filter(Boolean))
+    const uniqueTaskIds = new Set(data.map(item => item.taskId).filter(Boolean))
 
-    const totalCost = data.reduce((sum, item) => sum + Number(item.cost), 0)
-    const totalPrompts = data.reduce((sum, item) => sum + Number(item.usageCount), 0)
+    const totalCost = data.reduce((sum, item) => sum + (Number(item.cost) || 0), 0)
+    const totalPrompts = data.reduce((sum, item) => sum + (Number(item.usageCount) || 0), 0)
 
     return {
-      totalOrganizations: uniqueDomains.size,
-      totalProjects: uniqueProjects.size,
-      totalBuildspaces: uniqueBuildspaces.size,
-      totalUsers: uniqueUsers.size,
-      totalCost: parseFloat(totalCost.toFixed(2)),
-      totalAgenticCost: uniqueTaskIds.size,
-      totalPrompts: totalPrompts
+      totalOrganizations: uniqueDomains.size || 0,
+      totalProjects: uniqueProjects.size || 0,
+      totalBuildspaces: uniqueBuildspaces.size || 0,
+      totalUsers: uniqueUsers.size || 0,
+      totalCost: parseFloat(totalCost.toFixed(2)) || 0,
+      totalAgenticCost: uniqueTaskIds.size || 0,
+      totalPrompts: totalPrompts || 0
     }
   }, [data])
 
@@ -175,7 +175,7 @@ export function UserExtendedInsights({
       if (item.buildSpaceId) {
         org.buildspaces.add(item.buildSpaceId)
       }
-      org.cost += Number(item.cost)
+      org.cost += (Number(item.cost) || 0)
     })
 
     // Convert to array and sort by cost (descending)
@@ -222,7 +222,7 @@ export function UserExtendedInsights({
       if (item.buildSpaceId) {
         user.buildspaces.add(item.buildSpaceId)
       }
-      user.cost += Number(item.cost)
+      user.cost += (Number(item.cost) || 0)
     })
 
     // Convert to array and sort by cost (descending)
@@ -823,6 +823,32 @@ export function UserExtendedInsights({
         }).format(Number(params.value))
       },
       cellStyle: getCellStyle
+    },
+    {
+      field: 'runtime',
+      headerName: 'Runtime',
+      aggFunc: 'sum',
+      enableValue: true,
+      sortable: true,
+      filter: 'agNumberColumnFilter',
+      minWidth: 120,
+      valueGetter: (params) => {
+        if (!params.data) return 0
+        if (params.data.taskId === 'devzone_tracking') {
+          return Number((params.data as any).duration_minutes || 0)
+        }
+        return 0
+      },
+      valueFormatter: (params) => {
+        if (params.value == null || params.value === 0) return '0 min'
+        const hours = params.value / 60
+        if (hours < 1) {
+          return `${Math.round(params.value)} min`
+        }
+        return hours > 999 
+          ? `${(hours / 1000).toFixed(2)}K hrs`
+          : `${hours.toFixed(2)} hrs`
+      }
     },
     // Add monthly cost columns dynamically
     ...monthlyColumns
