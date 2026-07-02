@@ -201,11 +201,10 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
   }, [organizations, orgSearchTerm])
 
   const filteredProjects = useMemo(() => {
-    if (!projectSearchTerm) return projects.slice(0, 50)
+    if (!projectSearchTerm) return projects
     const searchLower = projectSearchTerm.toLowerCase()
     return projects
       .filter(p => p.name.toLowerCase().includes(searchLower))
-      .slice(0, 15)
   }, [projects, projectSearchTerm])
 
   const filteredEmails = useMemo(() => {
