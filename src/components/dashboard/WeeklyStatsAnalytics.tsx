@@ -962,6 +962,22 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
                 </div>
                 {/* Checklist */}
                 <div className="max-h-48 overflow-y-auto py-1">
+                  {/* All Projects Option */}
+                  <button
+                    onClick={() => onProjectClear && onProjectClear()}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors border-b border-gray-100 ${selectedProjectIds.length === 0 ? 'bg-green-50' : ''}`}
+                  >
+                    <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                      selectedProjectIds.length === 0 ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                    }`}>
+                      {selectedProjectIds.length === 0 && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className={`truncate ${selectedProjectIds.length === 0 ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                      All Projects
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">({projects.length})</span>
+                  </button>
+                  
                   {filteredProjects.length === 0 ? (
                     <div className="px-3 py-4 text-xs text-gray-500 text-center">No projects found</div>
                   ) : (
