@@ -103,9 +103,21 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
     setSelectedEmail('all')
     setShowOrgDropdown(false)
     setOrgSearchTerm('')
-    // Clear project filter since selected projects may not belong to the new org
-    if (onProjectClear) onProjectClear()
-  }, [onProjectClear])
+    // Intersect current project selection with projects that belong to the new org.
+    // If any selected projects don't exist in the new org, drop them and notify.
+    if (onProjectToggle && onProjectClear && selectedProjectIds.length > 0) {
+      const source = allData && allData.length > 0 ? allData : data
+      const validIds = new Set(
+        (org === 'all' ? source : source.filter(item => item.domain === org))
+          .map(item => item.projectId)
+          .filter(Boolean)
+      )
+      const stillValid = selectedProjectIds.filter(id => validIds.has(id))
+      // Replace selection: clear then re-add only the still-valid ones
+      onProjectClear()
+      stillValid.forEach(id => onProjectToggle(id))
+    }
+  }, [onProjectClear, onProjectToggle, selectedProjectIds, allData, data])
 
   const handleEmailSelection = useCallback((email: string) => {
     setSelectedEmail(email)
@@ -176,20 +188,23 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
   }, [allData, data, selectedOrganization])
 
   const emails = useMemo(() => {
-    let filteredData = data
+    // Use allData as base so email list doesn't shrink when projects are pre-filtered,
+    // then narrow by org and selected projects for relevant context.
+    const source = allData && allData.length > 0 ? allData : data
+    let base = source
     if (selectedOrganization !== 'all') {
-      filteredData = filteredData.filter(item => item.domain === selectedOrganization)
+      base = base.filter(item => item.domain === selectedOrganization)
     }
     if (selectedProjectIds.length > 0) {
       const idSet = new Set(selectedProjectIds)
-      filteredData = filteredData.filter(item => idSet.has(item.projectId))
+      base = base.filter(item => !item.projectId || idSet.has(item.projectId))
     }
     const emailSet = new Set<string>()
-    filteredData.forEach(item => {
+    base.forEach(item => {
       if (item.email) emailSet.add(item.email)
     })
     return Array.from(emailSet).sort()
-  }, [data, selectedOrganization, selectedProjectIds])
+  }, [allData, data, selectedOrganization, selectedProjectIds])
 
   // Filtered options with search
   const filteredOrganizations = useMemo(() => {
@@ -295,7 +310,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
 
       const filteredPeriodData = periodData.filter(item => {
         const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-        const projectMatch = selectedProjectIds.length === 0 || selectedProjectIds.includes(item.projectId)
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
         const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
         return orgMatch && projectMatch && emailMatch
       })
@@ -331,7 +346,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
         periodData.forEach(item => {
           if (item.taskId === 'devzone_tracking') {
             const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProjectIds.length === 0 || selectedProjectIds.includes(item.projectId)
+            const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
             
             if (orgMatch && projectMatch) {
               if ((item as any).devzone_total_runtime_minutes) {
@@ -348,7 +363,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
         periodData.forEach(item => {
           if (item.taskId === 'devzone_tracking') {
             const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProjectIds.length === 0 || selectedProjectIds.includes(item.projectId)
+            const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
             const emailMatch = item.email === selectedEmail
             
             if (orgMatch && projectMatch && emailMatch && (item as any).duration_minutes) {
@@ -435,7 +450,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
         
         const dateMatch = itemDate >= startDate && itemDate <= endDate
         const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-        const projectMatch = selectedProjectIds.length === 0 || selectedProjectIds.includes(item.projectId)
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
         const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
         
         return dateMatch && orgMatch && projectMatch && emailMatch
@@ -546,7 +561,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
           
           const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
           const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-          const projectMatch = selectedProjectIds.length === 0 || selectedProjectIds.includes(item.projectId)
+          const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
           const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
           
           return dateMatch && orgMatch && projectMatch && emailMatch

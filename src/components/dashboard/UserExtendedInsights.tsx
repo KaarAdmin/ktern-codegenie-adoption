@@ -139,11 +139,12 @@ export function UserExtendedInsights({
     return availableProjects.filter(p => p.name.toLowerCase().includes(lower))
   }, [availableProjects, projectSearchTerm])
 
-  // The data slice used by all views — respects multi-project selection
+  // The data slice used by all views — respects multi-project selection.
+  // Rows with missing/empty projectId are always kept (never silently dropped).
   const filteredData = useMemo(() => {
     if (selectedProjectIds.length === 0) return data
     const idSet = new Set(selectedProjectIds)
-    return data.filter(item => idSet.has(item.projectId))
+    return data.filter(item => !item.projectId || idSet.has(item.projectId))
   }, [data, selectedProjectIds])
 
   // Project dropdown handlers
@@ -535,13 +536,15 @@ export function UserExtendedInsights({
     return null
   }, [changedRows])
 
-  // Generate monthly cost columns dynamically
+  // Generate monthly cost columns dynamically.
+  // Deliberately uses full `data` (not filteredData) so columns stay stable
+  // and never appear/disappear when the project filter changes.
   const monthlyColumns = useMemo(() => {
-    if (!filteredData.length) return []
+    if (!data.length) return []
 
-    // Get unique months from the data
+    // Get unique months from the full dataset
     const monthsSet = new Set<string>()
-    filteredData.forEach(item => {
+    data.forEach(item => {
       if (item.date) {
         const date = new Date(item.date)
         if (!isNaN(date.getTime())) {
@@ -639,7 +642,7 @@ export function UserExtendedInsights({
         }
       }
     })
-  }, [filteredData])
+  }, [data])
 
   const columnDefs: ColDef[] = useMemo(() => [
     {
