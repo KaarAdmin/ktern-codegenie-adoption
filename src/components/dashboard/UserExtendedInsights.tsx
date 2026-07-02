@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef, GridReadyEvent, GridApi, ColumnApi } from 'ag-grid-community'
 import { getUserLevelExtendedInsightsResponse, updateUserExtendedData } from '@/lib/api'
@@ -11,6 +11,7 @@ import { isAuthorizedUser, getCurrentUserEmail } from '@/lib/auth'
 import { useToastActions } from '@/contexts/ToastContext'
 import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare, Activity, ChevronDown, X, Check } from 'lucide-react'
 import { WeeklyStatsAnalytics } from './WeeklyStatsAnalytics'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import 'ag-grid-enterprise'
 
 interface UserExtendedInsightsProps {
@@ -121,15 +122,30 @@ export function UserExtendedInsights({
 
   // Derive unique project list from loaded data
   const availableProjects = useMemo(() => {
-    const seen = new Map<string, string>() // projectId -> projectName
+    const seen = new Map<string, string>() // id -> projectName
+    let hasUnassigned = false
+
     data.forEach(item => {
-      if (item.projectId && !seen.has(item.projectId)) {
-        seen.set(item.projectId, item.projectName || item.projectId)
+      // Fallback to projectName if projectId is missing to maintain legacy single-select behavior
+      const id = item.projectId || item.projectName
+      if (id) {
+        if (!seen.has(id)) {
+          seen.set(id, item.projectName || id)
+        }
+      } else {
+        hasUnassigned = true
       }
     })
-    return Array.from(seen.entries())
+
+    const projects = Array.from(seen.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
+
+    if (hasUnassigned) {
+      projects.push({ id: 'UNASSIGNED_PROJECT', name: 'Unassigned / No Project' })
+    }
+
+    return projects
   }, [data])
 
   // Filtered project list based on search term in dropdown
@@ -140,11 +156,16 @@ export function UserExtendedInsights({
   }, [availableProjects, projectSearchTerm])
 
   // The data slice used by all views — respects multi-project selection.
-  // Rows with missing/empty projectId are always kept (never silently dropped).
   const filteredData = useMemo(() => {
     if (selectedProjectIds.length === 0) return data
     const idSet = new Set(selectedProjectIds)
-    return data.filter(item => !item.projectId || idSet.has(item.projectId))
+    return data.filter(item => {
+      const id = item.projectId || item.projectName
+      if (id) {
+        return idSet.has(id)
+      }
+      return idSet.has('UNASSIGNED_PROJECT')
+    })
   }, [data, selectedProjectIds])
 
   // Project dropdown handlers
@@ -166,16 +187,10 @@ export function UserExtendedInsights({
   }, [])
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Element
-      if (!target.closest('[data-project-dropdown]')) {
-        setShowProjectDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  const projectDropdownRef = useRef<HTMLDivElement>(null)
+  useClickOutside(projectDropdownRef, () => {
+    setShowProjectDropdown(false)
+  })
 
   // Calculate summary statistics
   const summaryStats = useMemo((): SummaryStats => {
@@ -917,7 +932,7 @@ export function UserExtendedInsights({
     },
     // Add monthly cost columns dynamically
     ...monthlyColumns
-  ], [isRowEditable, getCellStyle, filteredData, monthlyColumns, isPivotMode])
+  ], [isRowEditable, getCellStyle, monthlyColumns, isPivotMode])
 
   const defaultColDef = useMemo(() => ({
     sortable: true,
@@ -1261,7 +1276,7 @@ export function UserExtendedInsights({
         {/* Search and Controls */}
         <div className="flex items-center space-x-3">
           {/* Multi-Project Filter Dropdown */}
-          <div className="relative" data-project-dropdown>
+          <div className="relative" data-project-dropdown ref={projectDropdownRef}>
             <button
               onClick={() => setShowProjectDropdown(prev => !prev)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${

@@ -1,9 +1,11 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { UserExtendedModel } from '@/types'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { useToastActions } from '@/contexts/ToastContext'
 import { 
   LineChart, 
   Line, 
@@ -97,6 +99,9 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
   const [showEmailDropdown, setShowEmailDropdown] = useState<boolean>(false)
   const [showPeriodsDropdown, setShowPeriodsDropdown] = useState<boolean>(false)
 
+  const { showInfo } = useToastActions()
+  const filtersRef = useRef<HTMLDivElement>(null)
+
   // Optimized event handlers
   const handleOrgSelection = useCallback((org: string) => {
     setSelectedOrganization(org)
@@ -109,13 +114,19 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
       const source = allData && allData.length > 0 ? allData : data
       const validIds = new Set(
         (org === 'all' ? source : source.filter(item => item.domain === org))
-          .map(item => item.projectId)
+          .map(item => item.projectId || item.projectName || 'UNASSIGNED_PROJECT')
           .filter(Boolean)
       )
       const stillValid = selectedProjectIds.filter(id => validIds.has(id))
+      const droppedCount = selectedProjectIds.length - stillValid.length
+      
       // Replace selection: clear then re-add only the still-valid ones
       onProjectClear()
       stillValid.forEach(id => onProjectToggle(id))
+      
+      if (droppedCount > 0) {
+        showInfo(`${droppedCount} project(s) unselected as they do not belong to the new organization.`)
+      }
     }
   }, [onProjectClear, onProjectToggle, selectedProjectIds, allData, data])
 
@@ -146,20 +157,12 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
   }, [onProjectClear])
 
   // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element
-      if (!target.closest('.dropdown-container')) {
-        setShowOrgDropdown(false)
-        setShowProjectDropdown(false)
-        setShowEmailDropdown(false)
-        setShowPeriodsDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  useClickOutside(filtersRef, () => {
+    setShowOrgDropdown(false)
+    setShowProjectDropdown(false)
+    setShowEmailDropdown(false)
+    setShowPeriodsDropdown(false)
+  })
 
   // Get unique organizations, projects, and emails for filters
   const organizations = useMemo(() => {
@@ -195,16 +198,12 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
     if (selectedOrganization !== 'all') {
       base = base.filter(item => item.domain === selectedOrganization)
     }
-    if (selectedProjectIds.length > 0) {
-      const idSet = new Set(selectedProjectIds)
-      base = base.filter(item => !item.projectId || idSet.has(item.projectId))
-    }
     const emailSet = new Set<string>()
     base.forEach(item => {
       if (item.email) emailSet.add(item.email)
     })
     return Array.from(emailSet).sort()
-  }, [allData, data, selectedOrganization, selectedProjectIds])
+  }, [allData, data, selectedOrganization])
 
   // Filtered options with search
   const filteredOrganizations = useMemo(() => {
@@ -851,7 +850,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
   return (
     <div className={`space-y-3 ${className}`}>
         {/* Filters Row */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0" ref={filtersRef}>
           {/* Organization Filter */}
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
