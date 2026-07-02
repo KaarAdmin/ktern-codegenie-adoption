@@ -69,7 +69,7 @@ export function UserExtendedInsights({
   const [projectSearchTerm, setProjectSearchTerm] = useState('')
   const [showProjectDropdown, setShowProjectDropdown] = useState(false)
 
-  const { showSuccess, showError, showWarning, showInfo } = useToastActions()
+  const { showSuccess, showError } = useToastActions()
 
   // Check user authorization on component mount
   useEffect(() => {
@@ -1309,7 +1309,7 @@ export function UserExtendedInsights({
                     onClick={handleSelectAllProjects}
                     className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                   >
-                    Select All
+                    Show All
                   </button>
                   {selectedProjectIds.length > 0 && (
                     <button

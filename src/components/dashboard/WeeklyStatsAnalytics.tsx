@@ -103,7 +103,9 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
     setSelectedEmail('all')
     setShowOrgDropdown(false)
     setOrgSearchTerm('')
-  }, [])
+    // Clear project filter since selected projects may not belong to the new org
+    if (onProjectClear) onProjectClear()
+  }, [onProjectClear])
 
   const handleEmailSelection = useCallback((email: string) => {
     setSelectedEmail(email)
@@ -149,9 +151,11 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
 
   // Get unique organizations, projects, and emails for filters
   const organizations = useMemo(() => {
-    const orgs = Array.from(new Set(data.map(item => item.domain))).sort()
+    // Use allData so the org list doesn't shrink when projects are filtered
+    const source = allData && allData.length > 0 ? allData : data
+    const orgs = Array.from(new Set(source.map(item => item.domain))).sort()
     return orgs
-  }, [data])
+  }, [allData, data])
 
   const projects = useMemo(() => {
     // Use allData (full unfiltered set) so the dropdown always shows every project,
@@ -929,7 +933,7 @@ export function WeeklyStatsAnalytics({ data, allData, className = '', selectedPr
                     onClick={() => onProjectClear && onProjectClear()}
                     className="text-xs text-green-600 hover:text-green-800 font-medium"
                   >
-                    Select All
+                    Show All
                   </button>
                   {selectedProjectIds.length > 0 && onProjectClear && (
                     <button
