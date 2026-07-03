@@ -1,9 +1,11 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { UserExtendedModel } from '@/types'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { useToastActions } from '@/contexts/ToastContext'
 import { 
   LineChart, 
   Line, 
@@ -34,13 +36,18 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Clock
+  Clock,
+  Check
 } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
 
 interface TimeSeriesAnalyticsProps {
   data: UserExtendedModel[]
+  allData?: UserExtendedModel[]
   className?: string
+  selectedProjectIds?: string[]
+  onProjectToggle?: (projectId: string) => void
+  onProjectClear?: () => void
 }
 
 interface TimeSeriesData {
@@ -75,12 +82,11 @@ const formatRuntime = (minutes: number): { value: string; unit: string } => {
     : { value: hours.toFixed(2), unit: 'hrs' }
 }
 
-export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyticsProps) {
+export function WeeklyStatsAnalytics({ data, allData, className = '', selectedProjectIds = [], onProjectToggle, onProjectClear }: TimeSeriesAnalyticsProps) {
   const [activeView, setActiveView] = useState<ViewType>('activeUsers')
   const [chartType, setChartType] = useState<ChartType>('line')
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('daily')
   const [selectedOrganization, setSelectedOrganization] = useState<string>('all')
-  const [selectedProject, setSelectedProject] = useState<string>('all')
   const [selectedEmail, setSelectedEmail] = useState<string>('all')
   const [dataLimit, setDataLimit] = useState<number>(10)
   
@@ -93,21 +99,36 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   const [showEmailDropdown, setShowEmailDropdown] = useState<boolean>(false)
   const [showPeriodsDropdown, setShowPeriodsDropdown] = useState<boolean>(false)
 
+  const { showInfo } = useToastActions()
+  const filtersRef = useRef<HTMLDivElement>(null)
+
   // Optimized event handlers
   const handleOrgSelection = useCallback((org: string) => {
     setSelectedOrganization(org)
-    setSelectedProject('all')
     setSelectedEmail('all')
     setShowOrgDropdown(false)
     setOrgSearchTerm('')
-  }, [])
-
-  const handleProjectSelection = useCallback((project: string) => {
-    setSelectedProject(project)
-    setSelectedEmail('all')
-    setShowProjectDropdown(false)
-    setProjectSearchTerm('')
-  }, [])
+    // Intersect current project selection with projects that belong to the new org.
+    // If any selected projects don't exist in the new org, drop them and notify.
+    if (onProjectToggle && onProjectClear && selectedProjectIds.length > 0) {
+      const source = allData && allData.length > 0 ? allData : data
+      const validIds = new Set(
+        (org === 'all' ? source : source.filter(item => item.domain === org))
+          .map(item => item.projectId || item.projectName || 'UNASSIGNED_PROJECT')
+          .filter(Boolean)
+      )
+      const stillValid = selectedProjectIds.filter(id => validIds.has(id))
+      const droppedCount = selectedProjectIds.length - stillValid.length
+      
+      // Replace selection: clear then re-add only the still-valid ones
+      onProjectClear()
+      stillValid.forEach(id => onProjectToggle(id))
+      
+      if (droppedCount > 0) {
+        showInfo(`${droppedCount} project(s) unselected as they do not belong to the new organization.`)
+      }
+    }
+  }, [onProjectClear, onProjectToggle, selectedProjectIds, allData, data])
 
   const handleEmailSelection = useCallback((email: string) => {
     setSelectedEmail(email)
@@ -123,7 +144,6 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   // Clear all filters function
   const handleClearAllFilters = useCallback(() => {
     setSelectedOrganization('all')
-    setSelectedProject('all')
     setSelectedEmail('all')
     setDataLimit(10)
     setOrgSearchTerm('')
@@ -133,52 +153,57 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
     setShowProjectDropdown(false)
     setShowEmailDropdown(false)
     setShowPeriodsDropdown(false)
-  }, [])
+    if (onProjectClear) onProjectClear()
+  }, [onProjectClear])
 
   // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element
-      if (!target.closest('.dropdown-container')) {
-        setShowOrgDropdown(false)
-        setShowProjectDropdown(false)
-        setShowEmailDropdown(false)
-        setShowPeriodsDropdown(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  useClickOutside(filtersRef, () => {
+    setShowOrgDropdown(false)
+    setShowProjectDropdown(false)
+    setShowEmailDropdown(false)
+    setShowPeriodsDropdown(false)
+  })
 
   // Get unique organizations, projects, and emails for filters
   const organizations = useMemo(() => {
-    const orgs = Array.from(new Set(data.map(item => item.domain))).sort()
+    // Use allData so the org list doesn't shrink when projects are filtered
+    const source = allData && allData.length > 0 ? allData : data
+    const orgs = Array.from(new Set(source.map(item => item.domain))).sort()
     return orgs
-  }, [data])
+  }, [allData, data])
 
   const projects = useMemo(() => {
-    const filteredData = selectedOrganization === 'all' 
-      ? data 
-      : data.filter(item => item.domain === selectedOrganization)
-    const projs = Array.from(new Set(filteredData.map(item => item.projectName))).sort()
-    return projs
-  }, [data, selectedOrganization])
+    // Use allData (full unfiltered set) so the dropdown always shows every project,
+    // even when data has been pre-filtered by selectedProjectIds in the parent.
+    const source = allData && allData.length > 0 ? allData : data
+    const sourceData = selectedOrganization === 'all'
+      ? source
+      : source.filter(item => item.domain === selectedOrganization)
+    const seen = new Map<string, string>()
+    sourceData.forEach(item => {
+      if (item.projectId && !seen.has(item.projectId)) {
+        seen.set(item.projectId, item.projectName || item.projectId)
+      }
+    })
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [allData, data, selectedOrganization])
 
   const emails = useMemo(() => {
-    let filteredData = data
+    // Use allData as base so email list doesn't shrink when projects are pre-filtered,
+    // then narrow by org and selected projects for relevant context.
+    const source = allData && allData.length > 0 ? allData : data
+    let base = source
     if (selectedOrganization !== 'all') {
-      filteredData = filteredData.filter(item => item.domain === selectedOrganization)
-    }
-    if (selectedProject !== 'all') {
-      filteredData = filteredData.filter(item => item.projectName === selectedProject)
+      base = base.filter(item => item.domain === selectedOrganization)
     }
     const emailSet = new Set<string>()
-    filteredData.forEach(item => {
+    base.forEach(item => {
       if (item.email) emailSet.add(item.email)
     })
     return Array.from(emailSet).sort()
-  }, [data, selectedOrganization, selectedProject])
+  }, [allData, data, selectedOrganization])
 
   // Filtered options with search
   const filteredOrganizations = useMemo(() => {
@@ -190,11 +215,10 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   }, [organizations, orgSearchTerm])
 
   const filteredProjects = useMemo(() => {
-    if (!projectSearchTerm) return projects.slice(0, 50)
+    if (!projectSearchTerm) return projects
     const searchLower = projectSearchTerm.toLowerCase()
     return projects
-      .filter(project => project && typeof project === 'string' && project.toLowerCase().includes(searchLower))
-      .slice(0, 15)
+      .filter(p => p.name.toLowerCase().includes(searchLower))
   }, [projects, projectSearchTerm])
 
   const filteredEmails = useMemo(() => {
@@ -285,7 +309,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
 
       const filteredPeriodData = periodData.filter(item => {
         const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-        const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
         const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
         return orgMatch && projectMatch && emailMatch
       })
@@ -321,7 +345,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         periodData.forEach(item => {
           if (item.taskId === 'devzone_tracking') {
             const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
             
             if (orgMatch && projectMatch) {
               if ((item as any).devzone_total_runtime_minutes) {
@@ -338,7 +362,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         periodData.forEach(item => {
           if (item.taskId === 'devzone_tracking') {
             const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-            const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+            const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
             const emailMatch = item.email === selectedEmail
             
             if (orgMatch && projectMatch && emailMatch && (item as any).duration_minutes) {
@@ -388,7 +412,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         agenticTaskBreakdown
       }
     })
-  }, [data, selectedOrganization, selectedProject, selectedEmail, timePeriod, dataLimit])
+  }, [data, selectedOrganization, selectedProjectIds, selectedEmail, timePeriod, dataLimit])
 
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
@@ -425,7 +449,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         
         const dateMatch = itemDate >= startDate && itemDate <= endDate
         const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-        const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
         const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
         
         return dateMatch && orgMatch && projectMatch && emailMatch
@@ -488,7 +512,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
       avgRuntime: Math.round(avgRuntime),
       peakPeriod: peakPeriod?.period || 'N/A'
     }
-  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProjectIds, selectedEmail])
 
   const viewOptions = [
     { id: 'activeUsers' as const, label: 'User', icon: Users },
@@ -536,7 +560,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
           
           const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
           const orgMatch = selectedOrganization === 'all' || item.domain === selectedOrganization
-          const projectMatch = selectedProject === 'all' || item.projectName === selectedProject
+          const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
           const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
           
           return dateMatch && orgMatch && projectMatch && emailMatch
@@ -617,7 +641,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
         emailMapping
       }
     })
-  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProject, selectedEmail])
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProjectIds, selectedEmail])
 
   const renderChart = () => {
     const chartWidth = Math.max(800, chartData.length * 80)
@@ -826,7 +850,7 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
   return (
     <div className={`space-y-3 ${className}`}>
         {/* Filters Row */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0" ref={filtersRef}>
           {/* Organization Filter */}
           <div className="relative dropdown-container flex-1 min-w-0">
             <div className="relative">
@@ -874,51 +898,112 @@ export function WeeklyStatsAnalytics({ data, className = '' }: TimeSeriesAnalyti
             </div>
           </div>
           
-          {/* Project Filter */}
+          {/* Project Filter — multi-select checklist */}
           <div className="relative dropdown-container flex-1 min-w-0">
-            <div className="relative">
-              <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-green-600 pointer-events-none" />
-              {showProjectDropdown ? (
-                <ChevronUp 
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
-                  onClick={() => setShowProjectDropdown(false)}
-                />
-              ) : (
-                <ChevronDown 
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
-                  onClick={() => setShowProjectDropdown(true)}
-                />
-              )}
-              <input
-                type="text"
-                value={showProjectDropdown ? projectSearchTerm : (selectedProject === 'all' ? 'All Projects' : selectedProject)}
-                onChange={(e) => {
-                  setProjectSearchTerm(e.target.value)
-                  setShowProjectDropdown(true)
-                }}
-                onFocus={() => {
-                  setShowProjectDropdown(true)
-                  setProjectSearchTerm('')
-                }}
-                placeholder="Search projects..."
-                className="w-full pl-10 pr-10 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-pointer"
-              />
-              {showProjectDropdown && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                  <div className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleProjectSelection('all')}>
-                    <FolderOpen className="inline h-4 w-4 mr-2 text-green-600" />
-                    All Projects
-                    <span className="text-xs text-gray-500 ml-2">({projects.length} available)</span>
-                  </div>
-                  {filteredProjects.map((project, index) => (
-                    <div key={`project-${project}-${index}`} className="px-3 py-2 hover:bg-green-50 cursor-pointer text-sm" onClick={() => handleProjectSelection(project)}>
-                      <FolderOpen className="inline h-4 w-4 mr-2 text-green-600" />
-                      {project}
-                    </div>
-                  ))}
+            <button
+              onClick={() => setShowProjectDropdown(prev => !prev)}
+              className={`w-full flex items-center justify-between pl-3 pr-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                selectedProjectIds.length > 0
+                  ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-green-400'
+              }`}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">
+                  {selectedProjectIds.length === 0
+                    ? `All Projects (${projects.length})`
+                    : `${selectedProjectIds.length} Project${selectedProjectIds.length > 1 ? 's' : ''} selected`}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 flex-shrink-0 ml-1">
+                {selectedProjectIds.length > 0 && onProjectClear && (
+                  <X
+                    className="h-3.5 w-3.5 hover:opacity-70 cursor-pointer"
+                    onClick={e => { e.stopPropagation(); onProjectClear() }}
+                  />
+                )}
+                {showProjectDropdown ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+
+            {showProjectDropdown && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                {/* Search */}
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    type="text"
+                    value={projectSearchTerm}
+                    onChange={e => setProjectSearchTerm(e.target.value)}
+                    placeholder="Search projects..."
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+                    autoFocus
+                  />
                 </div>
-              )}
-            </div>
+                {/* Select All / Clear row */}
+                <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 bg-gray-50">
+                  <button
+                    onClick={() => onProjectClear && onProjectClear()}
+                    className="text-xs text-green-600 hover:text-green-800 font-medium"
+                  >
+                    Show All
+                  </button>
+                  {selectedProjectIds.length > 0 && onProjectClear && (
+                    <button
+                      onClick={() => onProjectClear()}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Clear ({selectedProjectIds.length})
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {filteredProjects.length} / {projects.length}
+                  </span>
+                </div>
+                {/* Checklist */}
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {/* All Projects Option */}
+                  <button
+                    onClick={() => onProjectClear && onProjectClear()}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors border-b border-gray-100 ${selectedProjectIds.length === 0 ? 'bg-green-50' : ''}`}
+                  >
+                    <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                      selectedProjectIds.length === 0 ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                    }`}>
+                      {selectedProjectIds.length === 0 && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className={`truncate ${selectedProjectIds.length === 0 ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                      All Projects
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">({projects.length})</span>
+                  </button>
+                  
+                  {filteredProjects.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-gray-500 text-center">No projects found</div>
+                  ) : (
+                    filteredProjects.map(project => {
+                      const isSelected = selectedProjectIds.includes(project.id)
+                      return (
+                        <button
+                          key={project.id}
+                          onClick={() => onProjectToggle && onProjectToggle(project.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${isSelected ? 'bg-green-50' : ''}`}
+                        >
+                          <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                            isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                          }`}>
+                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                          <span className={`truncate ${isSelected ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                            {project.name}
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Email Filter */}
