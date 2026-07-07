@@ -66,37 +66,46 @@ export async function GET(request: Request) {
       { $unwind: { path: "$agentDetails", preserveNullAndEmptyArrays: true } },
       {
         // Group by sessionid to calculate distinct run metrics and roll up tokens
-        $group: {
-          _id: "$sessionid",
-          agentid: { $first: "$agentid" },
-          agentName: { $first: "$agentDetails.name" },
-          userid: { $first: "$userid" },
-          userFullName: { $first: "$userDetails.fullName" },
-          userEmail: { $first: "$userDetails.email" },
-          userDomain: { $first: "$userDetails.orgDomain" },
-          projectid: { $first: "$projectid" },
-          projectName: { $first: "$projectDetails.projectName" },
-          purpose: { $first: "$purpose" },
-          environment: { $first: "$environment" },
-          date: { $first: "$createdon" },
-          
-          inputTokens: { $sum: { $ifNull: ["$inputtokens", 0] } },
-          outputTokens: { $sum: { $ifNull: ["$outputtokens", 0] } },
-          totalTokens: { $sum: { $ifNull: ["$totaltokens", 0] } },
-          cacheReadTokens: { $sum: { $ifNull: ["$cachereadtokens", 0] } },
-          cacheWriteTokens: { $sum: { $ifNull: ["$cachewritetokens", 0] } },
-          status: { $first: "$status" }
-        }
+          $group: {
+            _id: "$sessionid",
+            agentid: { $first: "$agentid" },
+            agentName: { $first: "$agentDetails.name" },
+            userid: { $first: "$userid" },
+            userFullName: { $first: "$userDetails.fullName" },
+            userEmail: { $first: "$userDetails.email" },
+            userDomain: { $first: "$userDetails.orgDomain" },
+            projectid: { $first: "$projectid" },
+            projectName: { $first: "$projectDetails.projectName" },
+            purpose: { $first: "$purpose" },
+            environment: { $first: "$environment" },
+            date: { $first: "$createdon" },
+            model: { $first: "$model" },
+            inputTokens: { $sum: { $ifNull: ["$inputtokens", 0] } },
+            outputTokens: { $sum: { $ifNull: ["$outputtokens", 0] } },
+            totalTokens: { $sum: { $ifNull: ["$totaltokens", 0] } },
+            cacheReadTokens: { $sum: { $ifNull: ["$cachereadtokens", 0] } },
+            cacheWriteTokens: { $sum: { $ifNull: ["$cachewritetokens", 0] } },
+            status: { $first: "$status" }
+          }
       },
       {
-        // Calculate hardcoded costs (Claude 3.5 Sonnet approximations)
+        // Lookup model pricing and calculate cost dynamically
+        $lookup: {
+          from: "m_bedrockmodel_pricing",
+          localField: "model",
+          foreignField: "model_id",
+          as: "modelPricing"
+        }
+      },
+      { $unwind: { path: "$modelPricing", preserveNullAndEmptyArrays: true } },
+      {
         $addFields: {
           cost: {
             $add: [
-              { $multiply: ["$inputTokens", 0.000003] },
-              { $multiply: ["$outputTokens", 0.000015] },
-              { $multiply: ["$cacheReadTokens", 0.0000003] },
-              { $multiply: ["$cacheWriteTokens", 0.00000375] }
+               { $multiply: [ { $divide: ["$inputTokens", 1000000] }, { $ifNull: ["$modelPricing.pricing.input", 0] } ] },
+               { $multiply: [ { $divide: ["$outputTokens", 1000000] }, { $ifNull: ["$modelPricing.pricing.output", 0] } ] },
+               { $multiply: [ { $divide: ["$cacheReadTokens", 1000000] }, { $ifNull: ["$modelPricing.pricing.cache_read", 0] } ] },
+               { $multiply: [ { $divide: ["$cacheWriteTokens", 1000000] }, { $ifNull: ["$modelPricing.pricing.cache_write", 0] } ] }
             ]
           }
         }
@@ -115,11 +124,12 @@ export async function GET(request: Request) {
           purpose: { $ifNull: ["$purpose", "general"] },
           environment: { $ifNull: ["$environment", "dev"] },
           date: { $ifNull: ["$date", new Date().toISOString().split('T')[0]] },
-          inputTokens: 1,
-          outputTokens: 1,
-          totalTokens: 1,
+          model: { $ifNull: ["$model", "unknown"] },
+          inputTokens: "$inputTokens",
+          outputTokens: "$outputTokens",
+          totalTokens: "$totalTokens",
           status: { $ifNull: ["$status", "Completed"] },
-          cost: 1
+          cost: "$cost"
         }
       }
     )

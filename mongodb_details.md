@@ -11,8 +11,6 @@ sample:
   "_id": {
     "$oid": "67e3f8a9c4d5e6f7a8b9c0d1"
   },
-  "__originalid": "67e3f8a9c4d5e6f7a8b9c0d1",
-  "__references": [],
   "title": "Document Generation (Production)",
   "sessionid": "67e3f8a9c4d5e6f7a8b9c0d1",
   "agentid": "698da5017cee6c7e4d5e8615",
@@ -20,18 +18,14 @@ sample:
   "projectid": "5f899ef4361c2a32badb17e6",
   "purpose": "doc_generation",
   "environment": "prd",
+  "model": "arn:aws:bedrock:us-east-1:339712773532:application-inference-profile/lyl019qdfcw7",
   "inputtokens": 2500,
   "outputtokens": 1200,
   "totaltokens": 3700,
   "cachereadtokens": 300,
   "cachewritetokens": 150,
   "status": "Completed",
-  "createdby": "System",
-  "createdon": "2025-07-06",
-  "lasteditedby": "",
-  "lasteditedon": "",
-  "tags": [],
-  "__workitemtype": "projects-agent-analytics"
+  "createdon": "2025-07-06"
 }
 
 this contains the all the values we have that we can use to calculate the values for the kpi
@@ -772,4 +766,21 @@ sample:
   "hasSubPhases": true
 }
 the projectid in kt_t_agent_analytics will be mapped here to get the actaul project name[projectName]
+
+5. m_bedrockmodel_pricing
+sample:
+{
+  "_id": {
+    "$oid": "6a2fe9e85da7c0d0711494c6"
+  },
+  "model_id": "arn:aws:bedrock:us-east-1:339712773532:application-inference-profile/lyl019qdfcw7",
+  "model_name": "Claude Sonnet 4.6",
+  "provider": "anthropic",
+  "pricing": {
+    "input": 3,
+    "output": 15,
+    "cache_write": 3.75,
+    "cache_read": 0.3
+  }
+}
 
