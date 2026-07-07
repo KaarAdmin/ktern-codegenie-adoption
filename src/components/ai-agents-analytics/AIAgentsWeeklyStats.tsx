@@ -1,0 +1,1415 @@
+'use client'
+
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { AIAgentExtendedModel } from '@/types/aiAgents'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { useToastActions } from '@/contexts/ToastContext'
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts'
+import { 
+  Calendar, 
+  Users, 
+  Building2, 
+  FolderOpen, 
+  Layers, 
+  DollarSign, 
+  MessageSquare,
+  TrendingUp,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Clock,
+  Check
+} from 'lucide-react'
+import { format, startOfWeek, endOfWeek, eachWeekOfInterval, startOfMonth, endOfMonth, eachMonthOfInterval, startOfYear, endOfYear, eachYearOfInterval, eachDayOfInterval, parseISO, isValid } from 'date-fns'
+
+interface TimeSeriesAnalyticsProps {
+  data: AIAgentExtendedModel[]
+  allData?: AIAgentExtendedModel[]
+  className?: string
+  selectedProjectIds?: string[]
+  selectedAgentIds?: string[]
+  onProjectToggle?: (projectId: string) => void
+  onProjectClear?: () => void
+  onAgentToggle?: (agentId: string) => void
+  onAgentClear?: () => void
+}
+
+interface TimeSeriesData {
+  period: string
+  periodStart: string
+  periodEnd: string
+  activeUsers: number
+  activeAgents: number
+  totalTokens: number
+  totalCost: number
+  totalRuns: number
+  organizationBreakdown: { [key: string]: number }
+  projectBreakdown: { [key: string]: number }
+  agentBreakdown: { [key: string]: number }
+}
+
+type ViewType = 'activeUsers' | 'activeAgents' | 'tokens' | 'cost' | 'runs'
+type ChartType = 'line' | 'bar'
+type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C']
+
+const formatRuntime = (minutes: number): { value: string; unit: string } => {
+  const hours = minutes / 60
+  if (hours < 1) {
+    return { value: Math.round(minutes).toString(), unit: 'min' }
+  }
+  return hours > 999 
+    ? { value: (hours / 1000).toFixed(2) + 'K', unit: 'hrs' }
+    : { value: hours.toFixed(2), unit: 'hrs' }
+}
+
+export function AIAgentsWeeklyStats({ data, allData, className = '', selectedProjectIds = [], selectedAgentIds = [], onProjectToggle, onProjectClear, onAgentToggle, onAgentClear }: TimeSeriesAnalyticsProps) {
+  const [activeView, setActiveView] = useState<ViewType>('activeUsers')
+  const [chartType, setChartType] = useState<ChartType>('line')
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('daily')
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('all')
+  const [selectedEmail, setSelectedEmail] = useState<string>('all')
+  const [dataLimit, setDataLimit] = useState<number>(10)
+  
+  // Search states for dropdowns
+  const [orgSearchTerm, setOrgSearchTerm] = useState<string>('')
+  const [projectSearchTerm, setProjectSearchTerm] = useState<string>('')
+  const [agentSearchTerm, setAgentSearchTerm] = useState<string>('')
+  const [emailSearchTerm, setEmailSearchTerm] = useState<string>('')
+  const [showOrgDropdown, setShowOrgDropdown] = useState<boolean>(false)
+  const [showProjectDropdown, setShowProjectDropdown] = useState<boolean>(false)
+  const [showAgentDropdown, setShowAgentDropdown] = useState<boolean>(false)
+  const [showEmailDropdown, setShowEmailDropdown] = useState<boolean>(false)
+  const [showPeriodsDropdown, setShowPeriodsDropdown] = useState<boolean>(false)
+
+  const { showInfo } = useToastActions()
+  const filtersRef = useRef<HTMLDivElement>(null)
+
+  // Optimized event handlers
+  const handleOrgSelection = useCallback((org: string) => {
+    setSelectedOrganization(org)
+    setSelectedEmail('all')
+    setShowOrgDropdown(false)
+    setOrgSearchTerm('')
+    
+    // When organization changes, clear selections that are no longer valid
+    if (onProjectToggle && onProjectClear && onAgentToggle && onAgentClear) {
+      const source = allData && allData.length > 0 ? allData : data
+      
+      // Filter data by new organization (extract domain from email)
+      const orgData = org === 'all' ? source : source.filter(item => {
+        const emailDomain = item.email && item.email.includes('@') ? item.email.split('@')[1] : ''
+        return emailDomain === org
+      })
+      
+      // Get valid project IDs in this org
+      const validProjectIds = new Set(
+        orgData
+          .map(item => item.projectId)
+          .filter(Boolean)
+      )
+      
+      // Get valid agent IDs in this org
+      const validAgentIds = new Set(
+        orgData
+          .map(item => item.agentId)
+          .filter(Boolean)
+      )
+      
+      // Check and update project selections
+      const stillValidProjects = selectedProjectIds.filter(id => validProjectIds.has(id))
+      const droppedProjects = selectedProjectIds.length - stillValidProjects.length
+      
+      // Check and update agent selections
+      const stillValidAgents = selectedAgentIds.filter(id => validAgentIds.has(id))
+      const droppedAgents = selectedAgentIds.length - stillValidAgents.length
+      
+      // Update selections
+      if (droppedProjects > 0 || droppedAgents > 0) {
+        onProjectClear()
+        onAgentClear()
+        stillValidProjects.forEach(id => onProjectToggle(id))
+        stillValidAgents.forEach(id => onAgentToggle(id))
+        
+        const messages = []
+        if (droppedProjects > 0) messages.push(`${droppedProjects} project(s)`)
+        if (droppedAgents > 0) messages.push(`${droppedAgents} agent(s)`)
+        
+        if (messages.length > 0) {
+          showInfo(`${messages.join(' and ')} unselected as they do not belong to the new organization.`)
+        }
+      }
+    }
+  }, [onProjectClear, onProjectToggle, onAgentClear, onAgentToggle, selectedProjectIds, selectedAgentIds, allData, data, showInfo])
+
+  const handleEmailSelection = useCallback((email: string) => {
+    setSelectedEmail(email)
+    setShowEmailDropdown(false)
+    setEmailSearchTerm('')
+  }, [])
+
+  const handlePeriodsSelection = useCallback((periods: number) => {
+    setDataLimit(periods)
+    setShowPeriodsDropdown(false)
+  }, [])
+
+  // Clear all filters function
+  const handleClearAllFilters = useCallback(() => {
+    setSelectedOrganization('all')
+    setSelectedEmail('all')
+    setDataLimit(10)
+    setOrgSearchTerm('')
+    setProjectSearchTerm('')
+    setAgentSearchTerm('')
+    setEmailSearchTerm('')
+    setShowOrgDropdown(false)
+    setShowProjectDropdown(false)
+    setShowAgentDropdown(false)
+    setShowEmailDropdown(false)
+    setShowPeriodsDropdown(false)
+    if (onProjectClear) onProjectClear()
+    if (onAgentClear) onAgentClear()
+  }, [onProjectClear, onAgentClear])
+
+  // Close dropdowns when clicking outside
+  useClickOutside(filtersRef, () => {
+    setShowOrgDropdown(false)
+    setShowProjectDropdown(false)
+    setShowAgentDropdown(false)
+    setShowEmailDropdown(false)
+    setShowPeriodsDropdown(false)
+  })
+
+  // Get unique organizations, projects, agents, and emails for filters - with cascading support
+  // Each dropdown shows options based on ALL currently selected filters
+  
+  // Helper to get filtered base data based on current selections
+  const getFilteredBaseData = useCallback((excludeFilter?: 'org' | 'project' | 'agent' | 'email') => {
+    const source = allData && allData.length > 0 ? allData : data
+    let filtered = source
+    
+    // Apply organization filter (unless we're getting org options)
+    if (excludeFilter !== 'org' && selectedOrganization !== 'all') {
+      filtered = filtered.filter(item => {
+        // Always extract domain from email (ignore existing domain field)
+        const emailDomain = item.email && item.email.includes('@') ? item.email.split('@')[1] : ''
+        return emailDomain === selectedOrganization
+      })
+    }
+    
+    // Apply project filter (unless we're getting project options)
+    if (excludeFilter !== 'project' && selectedProjectIds.length > 0) {
+      filtered = filtered.filter(item => 
+        item.projectId && selectedProjectIds.includes(item.projectId)
+      )
+    }
+    
+    // Apply agent filter (unless we're getting agent options)
+    if (excludeFilter !== 'agent' && selectedAgentIds.length > 0) {
+      filtered = filtered.filter(item => 
+        item.agentId && selectedAgentIds.includes(item.agentId)
+      )
+    }
+    
+    // Apply email filter (unless we're getting email options)
+    if (excludeFilter !== 'email' && selectedEmail !== 'all') {
+      filtered = filtered.filter(item => item.email === selectedEmail)
+    }
+    
+    return filtered
+  }, [allData, data, selectedOrganization, selectedProjectIds, selectedAgentIds, selectedEmail])
+
+  const organizations = useMemo(() => {
+    const source = getFilteredBaseData('org')
+    const orgSet = new Set<string>()
+    
+    source.forEach(item => {
+      // Always extract domain from email as the organization (ignore existing domain field)
+      if (item.email && item.email.includes('@')) {
+        const emailDomain = item.email.split('@')[1]
+        if (emailDomain) orgSet.add(emailDomain)
+      }
+    })
+    
+    return Array.from(orgSet).sort()
+  }, [getFilteredBaseData])
+
+  const projects = useMemo(() => {
+    const source = getFilteredBaseData('project')
+    const seen = new Map<string, string>()
+    
+    source.forEach(item => {
+      if (item.projectId && !seen.has(item.projectId)) {
+        seen.set(item.projectId, item.projectName || item.projectId)
+      }
+    })
+    
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [getFilteredBaseData])
+
+  const agents = useMemo(() => {
+    const source = getFilteredBaseData('agent')
+    const seen = new Map<string, string>()
+    
+    source.forEach(item => {
+      if (item.agentId && item.agentId !== 'N/A' && !seen.has(item.agentId)) {
+        seen.set(item.agentId, item.agentName || item.agentId)
+      }
+    })
+    
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [getFilteredBaseData])
+
+  const emails = useMemo(() => {
+    const source = getFilteredBaseData('email')
+    const emailSet = new Set<string>()
+    
+    source.forEach(item => {
+      if (item.email) emailSet.add(item.email)
+    })
+    
+    return Array.from(emailSet).sort()
+  }, [getFilteredBaseData])
+
+  // Filtered options with search
+  const filteredOrganizations = useMemo(() => {
+    if (!orgSearchTerm) return organizations.slice(0, 50)
+    const searchLower = orgSearchTerm.toLowerCase()
+    return organizations
+      .filter(org => org && typeof org === 'string' && org.toLowerCase().includes(searchLower))
+      .slice(0, 15)
+  }, [organizations, orgSearchTerm])
+
+  const filteredProjects = useMemo(() => {
+    if (!projectSearchTerm) return projects
+    const searchLower = projectSearchTerm.toLowerCase()
+    return projects
+      .filter(p => p.name.toLowerCase().includes(searchLower))
+  }, [projects, projectSearchTerm])
+
+  const filteredAgents = useMemo(() => {
+    if (!agentSearchTerm) return agents
+    const searchLower = agentSearchTerm.toLowerCase()
+    return agents
+      .filter(a => a.name.toLowerCase().includes(searchLower))
+  }, [agents, agentSearchTerm])
+
+  const filteredEmails = useMemo(() => {
+    if (!emailSearchTerm) return emails.slice(0, 50)
+    const searchLower = emailSearchTerm.toLowerCase()
+    return emails
+      .filter(email => email && typeof email === 'string' && email.toLowerCase().includes(searchLower))
+      .slice(0, 15)
+  }, [emails, emailSearchTerm])
+
+  // Process data into time series format
+  const timeSeriesData = useMemo((): TimeSeriesData[] => {
+    if (!data.length) return []
+
+    const validDates = data
+      .map(item => {
+        try {
+          return parseISO(item.date)
+        } catch {
+          return null
+        }
+      })
+      .filter((date): date is Date => date !== null && isValid(date))
+
+    if (validDates.length === 0) return []
+
+    const minDate = new Date(Math.min(...validDates.map(d => d.getTime())))
+    const maxDate = new Date(Math.max(...validDates.map(d => d.getTime())))
+
+    let allPeriods: Date[] = []
+    let periodGenerator: (start: Date) => Date
+    let periodEnd: (start: Date) => Date
+    let formatPeriod: (start: Date, end: Date) => string
+
+    switch (timePeriod) {
+      case 'daily':
+        allPeriods = eachDayOfInterval({ start: minDate, end: maxDate })
+        periodGenerator = (start) => start
+        periodEnd = (start) => start
+        formatPeriod = (start, end) => format(start, 'MMM dd, yyyy')
+        break
+      case 'weekly':
+        allPeriods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
+        periodGenerator = (start) => start
+        periodEnd = (start) => endOfWeek(start, { weekStartsOn: 1 })
+        formatPeriod = (start, end) => format(start, 'MMM dd') + ' - ' + format(end, 'MMM dd, yyyy')
+        break
+      case 'monthly':
+        allPeriods = eachMonthOfInterval({ start: minDate, end: maxDate })
+        periodGenerator = (start) => startOfMonth(start)
+        periodEnd = (start) => endOfMonth(start)
+        formatPeriod = (start, end) => format(start, 'MMM yyyy')
+        break
+      case 'yearly':
+        allPeriods = eachYearOfInterval({ start: minDate, end: maxDate })
+        periodGenerator = (start) => startOfYear(start)
+        periodEnd = (start) => endOfYear(start)
+        formatPeriod = (start, end) => format(start, 'yyyy')
+        break
+      case 'all':
+        allPeriods = [minDate]
+        periodGenerator = (start) => minDate
+        periodEnd = (start) => maxDate
+        formatPeriod = (start, end) => 'All (' + format(start, 'MMM yyyy') + ' - ' + format(end, 'MMM yyyy') + ')'
+        break
+      default:
+        allPeriods = eachWeekOfInterval({ start: minDate, end: maxDate }, { weekStartsOn: 1 })
+        periodGenerator = (start) => start
+        periodEnd = (start) => endOfWeek(start, { weekStartsOn: 1 })
+        formatPeriod = (start, end) => format(start, 'MMM dd') + ' - ' + format(end, 'MMM dd, yyyy')
+    }
+
+    const selectedPeriods = dataLimit > 0 ? allPeriods.slice(-dataLimit) : allPeriods
+
+    return selectedPeriods.map(periodStart => {
+      const actualPeriodStart = periodGenerator(periodStart)
+      const actualPeriodEnd = periodEnd(actualPeriodStart)
+      const periodLabel = formatPeriod(actualPeriodStart, actualPeriodEnd)
+
+      const periodData = data.filter(item => {
+        try {
+          const itemDate = parseISO(item.date)
+          return isValid(itemDate) && itemDate >= actualPeriodStart && itemDate <= actualPeriodEnd
+        } catch {
+          return false
+        }
+      })
+
+      const filteredPeriodData = periodData.filter(item => {
+        // Always extract domain from email (ignore existing domain field)
+        const emailDomain = item.email && item.email.includes('@') ? item.email.split('@')[1] : ''
+        const orgMatch = selectedOrganization === 'all' || emailDomain === selectedOrganization
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
+        const agentMatch = selectedAgentIds.length === 0 || !item.agentId || selectedAgentIds.includes(item.agentId)
+        const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+        return orgMatch && projectMatch && agentMatch && emailMatch
+      })
+
+      const activeUsersSet = new Set(
+        filteredPeriodData
+          .map(item => item.email)
+      )
+      
+      const activeAgentsSet = new Set(
+        filteredPeriodData
+          .filter(item => item.agentId && item.agentId !== 'N/A')
+          .map(item => item.agentId)
+      )
+      
+      const activeUsers = activeUsersSet.size
+      const activeAgents = activeAgentsSet.size
+      const totalTokens = filteredPeriodData.reduce((sum, item) => sum + (Number(item.totalTokens) || 0), 0)
+      const totalCost = filteredPeriodData.reduce((sum, item) => sum + (Number(item.cost) || 0), 0)
+      const totalRuns = filteredPeriodData.length
+
+      const organizationBreakdown: { [key: string]: number } = {}
+      filteredPeriodData.forEach(item => {
+        // Always extract domain from email (ignore existing domain field)
+        const emailDomain = item.email && item.email.includes('@') ? item.email.split('@')[1] : 'unknown'
+        organizationBreakdown[emailDomain] = (organizationBreakdown[emailDomain] || 0) + (Number(item.cost) || 0)
+      })
+
+      const projectBreakdown: { [key: string]: number } = {}
+      filteredPeriodData.forEach(item => {
+        projectBreakdown[item.projectName] = (projectBreakdown[item.projectName] || 0) + (Number(item.cost) || 0)
+      })
+
+      const agentBreakdown: { [key: string]: number } = {}
+      filteredPeriodData.forEach(item => {
+        const key = item.agentName || item.agentId || 'Unknown Agent'
+        agentBreakdown[key] = (agentBreakdown[key] || 0) + (Number(item.cost) || 0)
+      })
+
+      return {
+        period: periodLabel,
+        periodStart: format(actualPeriodStart, 'yyyy-MM-dd'),
+        periodEnd: format(actualPeriodEnd, 'yyyy-MM-dd'),
+        activeUsers,
+        activeAgents,
+        totalTokens,
+        totalCost,
+        totalRuns,
+        organizationBreakdown,
+        projectBreakdown,
+        agentBreakdown
+      }
+    })
+  }, [data, selectedOrganization, selectedProjectIds, selectedAgentIds, selectedEmail, timePeriod, dataLimit])
+
+  // Calculate summary statistics
+  const summaryStats = useMemo(() => {
+    // Get the date range from timeSeriesData (which already respects period and limit filters)
+    if (timeSeriesData.length === 0) {
+      return {
+        totalPeriods: 0,
+        uniqueActiveUsers: 0,
+        uniqueActiveAgents: 0,
+        avgActiveUsers: 0,
+        avgActiveAgents: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        totalRuns: 0,
+        avgPeriodTokens: 0,
+        avgPeriodCost: 0,
+        avgRuns: 0,
+        peakPeriod: 'N/A'
+      }
+    }
+
+    const firstPeriod = timeSeriesData[0]
+    const lastPeriod = timeSeriesData[timeSeriesData.length - 1]
+    const startDate = parseISO(firstPeriod.periodStart)
+    const endDate = parseISO(lastPeriod.periodEnd)
+
+    // Apply all filters including date range
+    const filteredData = data.filter(item => {
+      try {
+        const itemDate = parseISO(item.date)
+        if (!isValid(itemDate)) return false
+        
+        const dateMatch = itemDate >= startDate && itemDate <= endDate
+        
+        // Always extract domain from email (ignore existing domain field)
+        const emailDomain = item.email && item.email.includes('@') ? item.email.split('@')[1] : ''
+        const orgMatch = selectedOrganization === 'all' || emailDomain === selectedOrganization
+        const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
+        const agentMatch = selectedAgentIds.length === 0 || !item.agentId || selectedAgentIds.includes(item.agentId)
+        const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+        
+        return dateMatch && orgMatch && projectMatch && agentMatch && emailMatch
+      } catch {
+        return false
+      }
+    })
+    
+    const totalPeriods = timeSeriesData.length
+    const uniqueActiveUsers = new Set(filteredData.map(item => item.email)).size
+    const uniqueActiveAgents = new Set(
+      filteredData.filter(item => item.agentId && item.agentId !== 'N/A').map(item => item.agentId)
+    ).size
+    
+    const avgActiveUsers = totalPeriods > 0 ? timeSeriesData.reduce((sum, period) => sum + period.activeUsers, 0) / totalPeriods : 0
+    const avgActiveAgents = totalPeriods > 0 ? timeSeriesData.reduce((sum, period) => sum + period.activeAgents, 0) / totalPeriods : 0
+    const totalTokens = timeSeriesData.reduce((sum, period) => sum + period.totalTokens, 0)
+    const totalCost = timeSeriesData.reduce((sum, period) => sum + period.totalCost, 0)
+    const totalRuns = timeSeriesData.reduce((sum, period) => sum + period.totalRuns, 0)
+    
+    const avgPeriodTokens = totalPeriods > 0 ? totalTokens / totalPeriods : 0
+    const avgPeriodCost = totalPeriods > 0 ? totalCost / totalPeriods : 0
+    const avgRuns = totalPeriods > 0 ? totalRuns / totalPeriods : 0
+    
+    const peakPeriod = timeSeriesData.length > 0 ? timeSeriesData.reduce((peak, period) => {
+      const currentValue = activeView === 'activeUsers' ? period.activeUsers :
+                          activeView === 'activeAgents' ? period.activeAgents :
+                          activeView === 'tokens' ? period.totalTokens : 
+                          activeView === 'runs' ? period.totalRuns : period.totalCost
+      const peakValue = activeView === 'activeUsers' ? peak.activeUsers :
+                       activeView === 'activeAgents' ? peak.activeAgents :
+                       activeView === 'tokens' ? peak.totalTokens : 
+                       activeView === 'runs' ? peak.totalRuns : peak.totalCost
+      return currentValue > peakValue ? period : peak
+    }, timeSeriesData[0]) : { period: 'N/A' }
+
+    return {
+      totalPeriods,
+      uniqueActiveUsers,
+      uniqueActiveAgents,
+      avgActiveUsers: Math.round(avgActiveUsers),
+      avgActiveAgents: Math.round(avgActiveAgents),
+      totalTokens,
+      totalCost,
+      totalRuns,
+      avgPeriodTokens: Math.round(avgPeriodTokens),
+      avgPeriodCost,
+      avgRuns: Math.round(avgRuns),
+      peakPeriod: peakPeriod?.period || 'N/A'
+    }
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProjectIds, selectedAgentIds, selectedEmail])
+
+  const viewOptions = [
+    { id: 'activeUsers' as const, label: 'User', icon: Users },
+    { id: 'activeAgents' as const, label: 'Agent', icon: Layers },
+    { id: 'tokens' as const, label: 'Tokens', icon: MessageSquare },
+    { id: 'cost' as const, label: 'Cost', icon: DollarSign },
+    { id: 'runs' as const, label: 'Runs', icon: Activity }
+  ]
+
+  const chartTypeOptions = [
+    { id: 'line' as const, label: 'Line Chart', icon: TrendingUp },
+    { id: 'bar' as const, label: 'Bar Chart', icon: BarChart3 }
+  ]
+
+  const timePeriodOptions = [
+    { id: 'daily' as const, label: 'Daily' },
+    { id: 'weekly' as const, label: 'Weekly' },
+    { id: 'monthly' as const, label: 'Monthly' },
+    { id: 'yearly' as const, label: 'Yearly' },
+    { id: 'all' as const, label: 'All' }
+  ]
+
+  const getPeriodLabel = () => {
+    switch (timePeriod) {
+      case 'daily': return 'Daily'
+      case 'weekly': return 'Weekly'
+      case 'monthly': return 'Monthly'
+      case 'yearly': return 'Yearly'
+      case 'all': return 'All'
+      default: return 'Daily'
+    }
+  }
+
+  const chartData = useMemo(() => {
+    return timeSeriesData.map(period => {
+      // Get the period data with filters applied
+      const periodStart = parseISO(period.periodStart)
+      const periodEnd = parseISO(period.periodEnd)
+      
+      const periodData = data.filter(item => {
+        try {
+          const itemDate = parseISO(item.date)
+          if (!isValid(itemDate)) return false
+          
+          const dateMatch = itemDate >= periodStart && itemDate <= periodEnd
+          
+          // Extract domain from email if domain field is not set
+          const itemDomain = item.domain || (item.email ? item.email.split('@')[1] : '')
+          const orgMatch = selectedOrganization === 'all' || itemDomain === selectedOrganization
+          const projectMatch = selectedProjectIds.length === 0 || !item.projectId || selectedProjectIds.includes(item.projectId)
+          const agentMatch = selectedAgentIds.length === 0 || !item.agentId || selectedAgentIds.includes(item.agentId)
+          const emailMatch = selectedEmail === 'all' || item.email === selectedEmail
+          
+          return dateMatch && orgMatch && projectMatch && agentMatch && emailMatch
+        } catch {
+          return false
+        }
+      })
+
+      // Create email mapping based on the active view
+      let emailMapping: string[] = []
+      
+      if (activeView === 'activeUsers') {
+        emailMapping = Array.from(new Set(
+          periodData
+            .map(item => item.email)
+        ))
+      } else if (activeView === 'activeAgents') {
+        emailMapping = Array.from(new Set(
+          periodData
+            .filter(item => item.agentId && item.agentId !== 'N/A')
+            .map(item => item.email)
+        ))
+      } else if (activeView === 'tokens') {
+        // Group by email and sum tokens, then sort
+        const emailTokens = periodData.reduce((acc, item) => {
+          acc[item.email] = (acc[item.email] || 0) + (Number(item.totalTokens) || 0)
+          return acc
+        }, {} as Record<string, number>)
+        
+        emailMapping = Object.entries(emailTokens)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, count]) => `${email} (${count.toLocaleString()})`)
+      } else if (activeView === 'cost') {
+        // Group by email and sum cost, then sort
+        const emailCosts = periodData.reduce((acc, item) => {
+          acc[item.email] = (acc[item.email] || 0) + (Number(item.cost) || 0)
+          return acc
+        }, {} as Record<string, number>)
+        
+        emailMapping = Object.entries(emailCosts)
+          .sort(([, a], [, b]) => b - a)
+          .map(([email, cost]) => `${email} ($${cost.toFixed(2)})`)
+      } else if (activeView === 'runs') {
+        // Get unique emails that have runs
+        emailMapping = Array.from(new Set(
+          periodData
+            .map(item => item.email)
+        ))
+      }
+
+      return {
+        week: period.period,
+        value: activeView === 'activeUsers' ? period.activeUsers :
+               activeView === 'activeAgents' ? period.activeAgents :
+               activeView === 'tokens' ? period.totalTokens :
+               activeView === 'runs' ? period.totalRuns : period.totalCost,
+        label: activeView === 'activeUsers' ? 'Active Users' :
+               activeView === 'activeAgents' ? 'Active Agents' :
+               activeView === 'tokens' ? 'Total Tokens' :
+               activeView === 'runs' ? 'Runs' : 'Total Cost ($)',
+        emailMapping
+      }
+    })
+  }, [timeSeriesData, activeView, data, selectedOrganization, selectedProjectIds, selectedAgentIds, selectedEmail])
+
+  const renderChart = () => {
+    const chartWidth = Math.max(800, chartData.length * 80)
+    const needsScroll = chartWidth > 800
+
+    if (chartType === 'bar') {
+      return (
+        <div className={`w-full ${needsScroll ? 'overflow-x-auto' : ''}`}>
+          <div style={{ width: needsScroll ? `${chartWidth}px` : '100%', minWidth: '100%' }}>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="week" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  fontSize={12}
+                  interval={0}
+                />
+                <YAxis 
+                  tickFormatter={(value) => {
+                    if (activeView === 'cost') {
+                      return `$${value}`
+                    }
+                    return value.toLocaleString()
+                  }}
+                />
+                <Tooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length > 0) {
+                      const data = payload[0].payload;
+                      const emailMapping = data.emailMapping || [];
+                      
+                      return (
+                        <div 
+                          className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                          style={{ 
+                            pointerEvents: 'none',
+                            userSelect: 'none'
+                          }}
+                        >
+                          <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                          <div className="text-blue-600 mb-2">
+                            <span className="font-medium">{data.label}:</span> {
+                              activeView === 'cost' 
+                                ? `$${data.value.toFixed(2)}` 
+                                : data.value.toLocaleString()
+                            }
+                          </div>
+                          {emailMapping.length > 0 && (
+                            <div className="text-gray-600">
+                              <div className="font-medium text-gray-700 mb-1">
+                                {activeView === 'activeUsers' ? 'Active Users:' :
+                                 activeView === 'activeAgents' ? 'Users with Active Agents:' :
+                                 activeView === 'tokens' ? 'Users by Token Count:' :
+                                 activeView === 'cost' ? 'Users by Cost:' :
+                                 'Users by Run Count:'}
+                              </div>
+                              <div className="text-xs space-y-1">
+                                {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                  <div key={index} className="truncate">
+                                    {email}
+                                  </div>
+                                ))}
+                                {emailMapping.length > 8 && (
+                                  <div className="text-gray-500 italic">
+                                    ... and {emailMapping.length - 8} more users
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                  cursor={false}
+                />
+                <Legend />
+                <Bar 
+                  dataKey="value" 
+                  fill="#8884d8" 
+                  name={chartData[0]?.label || 'Value'}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {needsScroll && (
+            <div className="text-xs text-gray-500 mt-2 text-center">
+              ← Scroll horizontally to view all data points →
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className={`w-full ${needsScroll ? 'overflow-x-auto' : ''}`}>
+        <div style={{ width: needsScroll ? `${chartWidth}px` : '100%', minWidth: '100%' }}>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="week" 
+                angle={-45}
+                textAnchor="end"
+                height={100}
+                fontSize={12}
+                interval={0}
+              />
+              <YAxis 
+                tickFormatter={(value) => {
+                  if (activeView === 'cost') {
+                    return `$${value}`
+                  }
+                  return value.toLocaleString()
+                }}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length > 0) {
+                    const data = payload[0].payload;
+                    const emailMapping = data.emailMapping || [];
+                    
+                    return (
+                      <div 
+                        className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg text-sm max-w-sm"
+                        style={{ 
+                          pointerEvents: 'none',
+                          userSelect: 'none'
+                        }}
+                      >
+                        <div className="font-semibold text-gray-900 mb-2">{label}</div>
+                        <div className="text-blue-600 mb-2">
+                          <span className="font-medium">{data.label}:</span> {
+                            activeView === 'cost' 
+                              ? `$${data.value.toFixed(2)}` 
+                              : data.value.toLocaleString()
+                          }
+                        </div>
+                        {emailMapping.length > 0 && (
+                          <div className="text-gray-600">
+                            <div className="font-medium text-gray-700 mb-1">
+                              {activeView === 'activeUsers' ? 'Active Users:' :
+                               activeView === 'activeAgents' ? 'Users with Active Agents:' :
+                               activeView === 'tokens' ? 'Users by Token Count:' :
+                               activeView === 'cost' ? 'Users by Cost:' :
+                               'Users by Run Count:'}
+                            </div>
+                            <div className="text-xs space-y-1">
+                              {emailMapping.slice(0, 8).map((email: string, index: number) => (
+                                <div key={index} className="truncate">
+                                  {email}
+                                </div>
+                              ))}
+                              {emailMapping.length > 8 && (
+                                <div className="text-gray-500 italic">
+                                  ... and {emailMapping.length - 8} more users
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+                cursor={false}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="value" 
+                stroke="#8884d8" 
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                name={chartData[0]?.label || 'Value'}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        {needsScroll && (
+          <div className="text-xs text-gray-500 mt-2 text-center">
+            ← Scroll horizontally to view all data points →
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`space-y-3 ${className}`}>
+        {/* Filters Row */}
+        <div className="flex items-center gap-2 min-w-0" ref={filtersRef}>
+          {/* Organization Filter */}
+          <div className="relative dropdown-container flex-1 min-w-0">
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-600 pointer-events-none" />
+              {showOrgDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowOrgDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowOrgDropdown(true)}
+                />
+              )}
+              <input
+                type="text"
+                value={showOrgDropdown ? orgSearchTerm : (selectedOrganization === 'all' ? 'All Organizations' : selectedOrganization)}
+                onChange={(e) => {
+                  setOrgSearchTerm(e.target.value)
+                  setShowOrgDropdown(true)
+                }}
+                onFocus={() => {
+                  setShowOrgDropdown(true)
+                  setOrgSearchTerm('')
+                }}
+                placeholder="Search organizations..."
+                className="w-full pl-10 pr-10 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+              />
+              {showOrgDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  <div className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleOrgSelection('all')}>
+                    <Building2 className="inline h-4 w-4 mr-2 text-blue-600" />
+                    All Organizations
+                    <span className="text-xs text-gray-500 ml-2">({organizations.length} available)</span>
+                  </div>
+                  {filteredOrganizations.map((org, index) => (
+                    <div key={`org-${org}-${index}`} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm" onClick={() => handleOrgSelection(org)}>
+                      <Building2 className="inline h-4 w-4 mr-2 text-blue-600" />
+                      {org}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Project Filter — multi-select checklist */}
+          <div className="relative dropdown-container flex-1 min-w-0">
+            <button
+              onClick={() => setShowProjectDropdown(prev => !prev)}
+              className={`w-full flex items-center justify-between pl-3 pr-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                selectedProjectIds.length > 0
+                  ? 'bg-green-600 text-white border-green-600 hover:bg-green-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-green-400'
+              }`}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">
+                  {selectedProjectIds.length === 0
+                    ? `All Projects (${projects.length})`
+                    : `${selectedProjectIds.length} Project${selectedProjectIds.length > 1 ? 's' : ''} selected`}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 flex-shrink-0 ml-1">
+                {selectedProjectIds.length > 0 && onProjectClear && (
+                  <X
+                    className="h-3.5 w-3.5 hover:opacity-70 cursor-pointer"
+                    onClick={e => { e.stopPropagation(); onProjectClear() }}
+                  />
+                )}
+                {showProjectDropdown ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+
+            {showProjectDropdown && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                {/* Search */}
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    type="text"
+                    value={projectSearchTerm}
+                    onChange={e => setProjectSearchTerm(e.target.value)}
+                    placeholder="Search projects..."
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+                    autoFocus
+                  />
+                </div>
+                {/* Select All / Clear row */}
+                <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 bg-gray-50">
+                  <button
+                    onClick={() => onProjectClear && onProjectClear()}
+                    className="text-xs text-green-600 hover:text-green-800 font-medium"
+                  >
+                    Show All
+                  </button>
+                  {selectedProjectIds.length > 0 && onProjectClear && (
+                    <button
+                      onClick={() => onProjectClear()}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Clear ({selectedProjectIds.length})
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {filteredProjects.length} / {projects.length}
+                  </span>
+                </div>
+                {/* Checklist */}
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {/* All Projects Option */}
+                  <button
+                    onClick={() => onProjectClear && onProjectClear()}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors border-b border-gray-100 ${selectedProjectIds.length === 0 ? 'bg-green-50' : ''}`}
+                  >
+                    <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                      selectedProjectIds.length === 0 ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                    }`}>
+                      {selectedProjectIds.length === 0 && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className={`truncate ${selectedProjectIds.length === 0 ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                      All Projects
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">({projects.length})</span>
+                  </button>
+                  
+                  {filteredProjects.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-gray-500 text-center">No projects found</div>
+                  ) : (
+                    filteredProjects.map(project => {
+                      const isSelected = selectedProjectIds.includes(project.id)
+                      return (
+                        <button
+                          key={project.id}
+                          onClick={() => onProjectToggle && onProjectToggle(project.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${isSelected ? 'bg-green-50' : ''}`}
+                        >
+                          <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                            isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300 bg-white'
+                          }`}>
+                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                          <span className={`truncate ${isSelected ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                            {project.name}
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Agent Filter — multi-select checklist */}
+          <div className="relative dropdown-container flex-1 min-w-0">
+            <button
+              onClick={() => setShowAgentDropdown(prev => !prev)}
+              className={`w-full flex items-center justify-between pl-3 pr-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                selectedAgentIds.length > 0
+                  ? 'bg-purple-600 text-white border-purple-600 hover:bg-purple-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-purple-400'
+              }`}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Layers className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">
+                  {selectedAgentIds.length === 0
+                    ? `All Agents (${agents.length})`
+                    : `${selectedAgentIds.length} Agent${selectedAgentIds.length > 1 ? 's' : ''} selected`}
+                </span>
+              </span>
+              <span className="flex items-center gap-1 flex-shrink-0 ml-1">
+                {selectedAgentIds.length > 0 && onAgentClear && (
+                  <X
+                    className="h-3.5 w-3.5 hover:opacity-70 cursor-pointer"
+                    onClick={e => { e.stopPropagation(); onAgentClear() }}
+                  />
+                )}
+                {showAgentDropdown ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+
+            {showAgentDropdown && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                {/* Search */}
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    type="text"
+                    value={agentSearchTerm}
+                    onChange={e => setAgentSearchTerm(e.target.value)}
+                    placeholder="Search agents..."
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    autoFocus
+                  />
+                </div>
+                {/* Select All / Clear row */}
+                <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 bg-gray-50">
+                  <button
+                    onClick={() => onAgentClear && onAgentClear()}
+                    className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                  >
+                    Show All
+                  </button>
+                  {selectedAgentIds.length > 0 && onAgentClear && (
+                    <button
+                      onClick={() => onAgentClear()}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Clear ({selectedAgentIds.length})
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {filteredAgents.length} / {agents.length}
+                  </span>
+                </div>
+                {/* Checklist */}
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {/* All Agents Option */}
+                  <button
+                    onClick={() => onAgentClear && onAgentClear()}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors border-b border-gray-100 ${selectedAgentIds.length === 0 ? 'bg-purple-50' : ''}`}
+                  >
+                    <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                      selectedAgentIds.length === 0 ? 'bg-purple-600 border-purple-600' : 'border-gray-300 bg-white'
+                    }`}>
+                      {selectedAgentIds.length === 0 && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className={`truncate ${selectedAgentIds.length === 0 ? 'text-purple-800 font-medium' : 'text-gray-700'}`}>
+                      All Agents
+                    </span>
+                    <span className="text-xs text-gray-400 ml-auto">({agents.length})</span>
+                  </button>
+                  
+                  {filteredAgents.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-gray-500 text-center">No agents found</div>
+                  ) : (
+                    filteredAgents.map(agent => {
+                      const isSelected = selectedAgentIds.includes(agent.id)
+                      return (
+                        <button
+                          key={agent.id}
+                          onClick={() => onAgentToggle && onAgentToggle(agent.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${isSelected ? 'bg-purple-50' : ''}`}
+                        >
+                          <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
+                            isSelected ? 'bg-purple-600 border-purple-600' : 'border-gray-300 bg-white'
+                          }`}>
+                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                          </div>
+                          <span className={`truncate ${isSelected ? 'text-purple-800 font-medium' : 'text-gray-700'}`}>
+                            {agent.name}
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Email Filter */}
+          <div className="relative dropdown-container flex-1 min-w-0">
+            <div className="relative">
+              <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-orange-600 pointer-events-none" />
+              {showEmailDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowEmailDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowEmailDropdown(true)}
+                />
+              )}
+              <input
+                type="text"
+                value={showEmailDropdown ? emailSearchTerm : (selectedEmail === 'all' ? 'All Users' : selectedEmail)}
+                onChange={(e) => {
+                  setEmailSearchTerm(e.target.value)
+                  setShowEmailDropdown(true)
+                }}
+                onFocus={() => {
+                  setShowEmailDropdown(true)
+                  setEmailSearchTerm('')
+                }}
+                placeholder="Search users..."
+                className="w-full pl-10 pr-10 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent cursor-pointer"
+              />
+              {showEmailDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  <div className="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handleEmailSelection('all')}>
+                    <Users className="inline h-4 w-4 mr-2 text-orange-600" />
+                    All Users
+                    <span className="text-xs text-gray-500 ml-2">({emails.length} available)</span>
+                  </div>
+                  {filteredEmails.map((email, index) => (
+                    <div key={`email-${email}-${index}`} className="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm" onClick={() => handleEmailSelection(email)}>
+                      <Users className="inline h-4 w-4 mr-2 text-orange-600" />
+                      {email}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Periods Filter */}
+          <div className="relative dropdown-container flex-1 min-w-0">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-purple-600 pointer-events-none" />
+              {showPeriodsDropdown ? (
+                <ChevronUp 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowPeriodsDropdown(false)}
+                />
+              ) : (
+                <ChevronDown 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600" 
+                  onClick={() => setShowPeriodsDropdown(true)}
+                />
+              )}
+              <input
+                type="text"
+                value={dataLimit === 0 ? 'All Periods' : `Last ${dataLimit}`}
+                readOnly
+                onClick={() => setShowPeriodsDropdown(!showPeriodsDropdown)}
+                className="w-full pl-10 pr-10 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-700 hover:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
+              />
+              {showPeriodsDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm border-b border-gray-100" onClick={() => handlePeriodsSelection(0)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    All Periods
+                    <span className="text-xs text-gray-500 ml-2">(No limit)</span>
+                  </div>
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(10)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    Last 10
+                  </div>
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(25)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    Last 25
+                  </div>
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(50)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    Last 50
+                  </div>
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(60)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    Last 60
+                  </div>
+                  <div className="px-3 py-2 hover:bg-purple-50 cursor-pointer text-sm" onClick={() => handlePeriodsSelection(90)}>
+                    <Calendar className="inline h-4 w-4 mr-2 text-purple-600" />
+                    Last 90
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Clear All Filters Button */}
+          <div className="flex-shrink-0">
+            <Button
+              onClick={handleClearAllFilters}
+              variant="outline"
+              size="sm"
+              className="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+            >
+              {/* <X className="h-4 w-4 mr-1" /> */}
+
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#666666"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/></svg>
+              {/* <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="24px" fill="#666666"><path d="m592-481-57-57 143-182H353l-80-80h487q25 0 36 22t-4 42L592-481ZM791-56 560-287v87q0 17-11.5 28.5T520-160h-80q-17 0-28.5-11.5T400-200v-247L56-791l56-57 736 736-57 56ZM535-538Z"/></svg> */}
+              Clear All
+            </Button>
+          </div>
+        </div>
+
+        {/* Summary Stats Grid */}
+        <div className="mt-4 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+          <div className="bg-blue-50 p-2 rounded text-center border border-blue-100">
+            <div className="text-base font-bold text-blue-600">{summaryStats.totalPeriods}</div>
+            <div className="text-xs text-blue-800">Total Periods</div>
+          </div>
+          <div className="bg-green-50 p-2 rounded text-center border border-green-100">
+            <div className="text-base font-bold text-green-600">{summaryStats.uniqueActiveUsers}</div>
+            <div className="text-xs text-green-800">Unique Users</div>
+          </div>
+          <div className="bg-purple-50 p-2 rounded text-center border border-purple-100">
+            <div className="text-base font-bold text-purple-600">{summaryStats.uniqueActiveAgents}</div>
+            <div className="text-xs text-purple-800">Unique Agents</div>
+          </div>
+          <div className="bg-orange-50 p-2 rounded text-center border border-orange-100">
+            <div className="text-base font-bold text-orange-600">{new Intl.NumberFormat('en-US', { notation: 'compact' }).format(summaryStats.totalTokens)}</div>
+            <div className="text-xs text-orange-800">Total Tokens</div>
+          </div>
+          <div className="bg-red-50 p-2 rounded text-center border border-red-100">
+            <div className="text-base font-bold text-red-600">${summaryStats.totalCost.toFixed(2)}</div>
+            <div className="text-xs text-red-800">Total Cost</div>
+          </div>
+          <div className="bg-indigo-50 p-2 rounded text-center border border-indigo-100">
+            <div className="text-base font-bold text-indigo-600">{summaryStats.totalRuns}</div>
+            <div className="text-xs text-indigo-800">Runs</div>
+          </div>
+        </div>
+
+        {/* Average Stats Grid */}
+        <div className="mt-2 grid grid-cols-3 md:grid-cols-6 lg:grid-cols-6 gap-2">
+          <div className="bg-slate-50 p-1.5 rounded text-center border border-slate-100">
+            <div className="text-xs font-semibold text-slate-600">{summaryStats.peakPeriod.slice(0, 12)}...</div>
+            <div className="text-xs text-slate-800">Peak Period</div>
+          </div>
+          <div className="bg-teal-50 p-1.5 rounded text-center border border-teal-100">
+            <div className="text-xs font-semibold text-teal-600">{summaryStats.avgActiveUsers}</div>
+            <div className="text-xs text-teal-800">Avg Users</div>
+          </div>
+          <div className="bg-violet-50 p-1.5 rounded text-center border border-violet-100">
+            <div className="text-xs font-semibold text-violet-600">{summaryStats.avgActiveAgents}</div>
+            <div className="text-xs text-violet-800">Avg Agents</div>
+          </div>
+          <div className="bg-amber-50 p-1.5 rounded text-center border border-amber-100">
+            <div className="text-xs font-semibold text-amber-600">{new Intl.NumberFormat('en-US', { notation: 'compact' }).format(summaryStats.avgPeriodTokens)}</div>
+            <div className="text-xs text-amber-800">Avg Tokens</div>
+          </div>
+          <div className="bg-rose-50 p-1.5 rounded text-center border border-rose-100">
+            <div className="text-xs font-semibold text-rose-600">${summaryStats.avgPeriodCost.toFixed(2)}</div>
+            <div className="text-xs text-rose-800">Avg Cost</div>
+          </div>
+          <div className="bg-cyan-50 p-1.5 rounded text-center border border-cyan-100">
+            <div className="text-xs font-semibold text-cyan-600">{summaryStats.avgRuns}</div>
+            <div className="text-xs text-cyan-800">Avg Runs</div>
+          </div>
+        </div>
+
+        {/* Time Period and Analysis Controls Card */}
+        <div className="rounded-lg border bg-white p-6 shadow-sm p-4">
+          <div className="flex flex-wrap gap-4 mb-4 pb-3 border-b border-gray-200">
+            {/* Time Period Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Time Period:</span>
+              <div className="flex flex-wrap gap-1">
+                {timePeriodOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => setTimePeriod(option.id)}
+                    className={`px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                      timePeriod === option.id
+                        ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Vertical Divider - only visible on large screens */}
+            <div className="hidden lg:block w-px h-8 bg-gray-300"></div>
+            
+            {/* Analysis Type Controls - wraps to next row on small screens */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Analysis:</span>
+              <div className="flex flex-wrap gap-1">
+                {viewOptions.map((option) => {
+                  const Icon = option.icon
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => setActiveView(option.id)}
+                      className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                        activeView === option.id
+                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 mr-1" />
+                      {option.label.split(' ')[0]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Chart Header with Chart Type Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {viewOptions.find(v => v.id === activeView)?.label} - {getPeriodLabel()} Trend
+              </h3>
+              {/* Chart Type Controls moved next to the trend text */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex gap-1">
+                  {chartTypeOptions.map((option) => {
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => setChartType(option.id)}
+                        className={`flex items-center px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
+                          chartType === option.id
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 mr-1" />
+                        {option.label.split(' ')[0]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className="text-sm text-gray-500">
+                {timeSeriesData.length} periods
+                {dataLimit > 0 && (
+                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium">
+                    Last {dataLimit}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Chart Content */}
+          {timeSeriesData.length > 0 ? (
+            <div className="w-full">
+              {renderChart()}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500">
+              <div className="text-center">
+                <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium">No data available for the selected filters</p>
+                <p className="text-sm mt-2">Try adjusting your organization, project, or time period filters</p>
+              </div>
+            </div>
+          )}
+        </div>
+    </div>
+  )
+}

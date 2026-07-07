@@ -4,7 +4,11 @@ const nextConfig = {
   experimental: {
     esmExternals: 'loose'
   },
-  webpack: (config, { isServer }) => {
+  // Increase static page generation timeout
+  staticPageGenerationTimeout: 120,
+  // Optimize production builds
+  productionBrowserSourceMaps: false,
+  webpack: (config, { isServer, dev }) => {
     // Handle Syncfusion modules
     if (!isServer) {
       config.resolve.fallback = {
@@ -15,18 +19,41 @@ const nextConfig = {
       }
     }
 
-    // Optimize Syncfusion bundle
+    // Optimize Syncfusion bundle with better chunk splitting
     config.optimization = {
       ...config.optimization,
       splitChunks: {
         ...config.optimization.splitChunks,
+        chunks: 'all',
+        maxInitialRequests: 25,
+        minSize: 20000,
         cacheGroups: {
           ...config.optimization.splitChunks?.cacheGroups,
+          default: false,
+          vendors: false,
+          // Syncfusion libraries
           syncfusion: {
             test: /[\\/]node_modules[\\/]@syncfusion[\\/]/,
             name: 'syncfusion',
             chunks: 'all',
             priority: 10,
+            reuseExistingChunk: true,
+          },
+          // AG Grid libraries
+          aggrid: {
+            test: /[\\/]node_modules[\\/]ag-grid/,
+            name: 'ag-grid',
+            chunks: 'all',
+            priority: 9,
+            reuseExistingChunk: true,
+          },
+          // Common vendor chunks
+          commons: {
+            name: 'commons',
+            test: /[\\/]node_modules[\\/]/,
+            priority: 8,
+            minChunks: 2,
+            reuseExistingChunk: true,
           },
         },
       },

@@ -5,14 +5,17 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
 import { EnhancedPivotDashboard } from '@/components/dashboard/EnhancedPivotDashboard'
-import { LogOut, User } from 'lucide-react'
+import { AIAgentsDashboard } from '@/components/ai-agents-analytics/AIAgentsDashboard'
+import { DashboardNavigator, DashboardView } from '@/components/dashboard/DashboardNavigator'
+import { LogOut } from 'lucide-react'
 
 export default function DashboardPage() {
   const { user, logout, loading: authLoading } = useAuth()
   const router = useRouter()
+  const [activeView, setActiveView] = useState<DashboardView>('ai-agents-analytics')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   React.useEffect(() => {
-    // Check authentication on mount
     if (!authLoading && !user) {
       router.push('/login')
     }
@@ -31,42 +34,49 @@ export default function DashboardPage() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <img
-                  src="https://app.ktern.com/codegenie/frontend/_next/static/media/KTern.d14aee5e.png"
-                  alt="KTern Logo"
-                  className="h-8 w-auto"
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center space-x-1"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+  const viewTitle =
+    activeView === 'ai-agents-analytics' ? 'AI Agents Analytics' : 'CodeGenie Dashboard'
 
-      {/* Main Content */}
-      <main className="w-full px-4 sm:px-6 lg:px-4 py-1">
-        <EnhancedPivotDashboard />
-      </main>
+  return (
+    <div className="dashboard-shell">
+      {/* Collapsible Left Navigator */}
+      <DashboardNavigator
+        activeView={activeView}
+        onViewChange={setActiveView}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+      />
+
+      {/* Right Content Pane */}
+      <div className="dashboard-content-pane">
+        {/* Top Header */}
+        <header className="dashboard-topbar">
+          <div className="topbar-left">
+            <h1 className="topbar-title">{viewTitle}</h1>
+          </div>
+          <div className="topbar-right">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="flex items-center space-x-1"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </Button>
+          </div>
+        </header>
+
+        {/* Main Content — render both, hide inactive to preserve data */}
+        <main className="dashboard-main">
+          <div style={{ display: activeView === 'ai-agents-analytics' ? 'block' : 'none' }}>
+            <AIAgentsDashboard />
+          </div>
+          <div style={{ display: activeView === 'codegenie-dashboard' ? 'block' : 'none' }}>
+            <EnhancedPivotDashboard />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }
