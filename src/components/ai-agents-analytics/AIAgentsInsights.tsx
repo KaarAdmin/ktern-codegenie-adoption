@@ -879,6 +879,15 @@ export function AIAgentsInsights({
     defaultToolPanel: 'columns'
   }), [])
 
+  // Transform data to extract email domain as organization before passing to grid
+  const gridData = useMemo(() => {
+    return filteredData.map(item => ({
+      ...item,
+      // Override domain field with email domain extraction
+      domain: item.email && item.email.includes('@') ? item.email.split('@')[1] : (item.domain || 'Unknown')
+    }))
+  }, [filteredData])
+
   if (error) {
     return (
       <div className={`bg-red-50 border border-red-200 rounded-lg p-6 ${className}`}>
@@ -1363,7 +1372,7 @@ export function AIAgentsInsights({
       <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
         <AgGridReact
           columnDefs={columnDefs}
-          rowData={filteredData}
+          rowData={gridData}
           defaultColDef={defaultColDef}
           autoGroupColumnDef={autoGroupColumnDef}
           onGridReady={onGridReady}

@@ -8,11 +8,9 @@ if (!process.env.MONGODB_URI) {
 }
 
 const options = {
-  // Increase timeouts significantly
-  serverSelectionTimeoutMS: 30000, // 30 seconds
+  serverSelectionTimeoutMS: 30000,
   connectTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  // Force IPv4 to avoid IPv6 issues on Windows
   family: 4,
 }
 
