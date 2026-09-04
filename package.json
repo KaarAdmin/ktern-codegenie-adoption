@@ -30,6 +30,7 @@
     "@types/react-dom": "^18",
     "ag-grid-enterprise": "^29.0.0",
     "ag-grid-react": "29.0.0",
+    "antd": "^5.29.3",
     "autoprefixer": "^10.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
