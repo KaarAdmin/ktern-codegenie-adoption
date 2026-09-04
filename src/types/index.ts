@@ -22,109 +22,104 @@ export interface User {
 }
 
 
-export interface OrganizationLevelInsightsResponse {
-  status_code: number;
-  count: number;
-  organizations: OrganizationModel[];
+// ===== Adoption Dashboard =====
+
+export interface AdoptionSummaryTotals {
+  projects: number;
+  buildspaces: number;
+  users: number;
+  agenticTasks: number;
+  prompts: number;
+  cost: number;
+  infraRuntimeMinutes: number;
+  userSessionMinutes: number;
+  organizations: number;
 }
 
-export interface OrganizationModel {
-  organization: string;
-  active: boolean;
-  app_deployed_count: number;
-  app_generated_count: number;
-  country: string;
-  createdOn: string;
-  eventsLast4Weeks: number;
-  industry: string;
-  lastCodeGenieEventOn: string | null;
-  sbu: string;
-  totalActiveProject: number;
-  totalActiveUser: number;
-  totalCost: number;
-  totalEvents: number;
-  totalProject: number;
-  totalUsers: number;
-  totalUsersAccepted: number;
-  totalUsersInvited: number;
-  globalTotalActiveUser: number;
-  globalTotalUsers: number;
-  globalTotalUsersAccepted: number;
-  globalTotalUsersInvited: number;
-}
-
-
-export interface ProjectModel {
-  projectId: string;
-  projectName: string;
-  createdOn: string;
-  country: string;
-  sbu: string;
-  industry: string;
-  active: boolean;
-  organizations: string[];
-  totalUsers: number;
-  totalUsersInvited: number;
-  totalUsersAccepted: number;
-  totalActiveUser: number;
-  lastCodeGenieEventOn: string | null;
-  app_deployed_count: number;
-  app_generated_count: number;
-  totalEvents: number;
-  totalCost: number;
-  eventsLast4Weeks: number;
-  globalTotalActiveUser: number;
-  globalTotalUsers: number;
-  globalTotalUsersAccepted: number;
-  globalTotalUsersInvited: number;
-}
-
-export interface ProjectLevelInsightsResponse {
-  status_code: number;
-  count: number;
-  projects: ProjectModel[];
-}
-
-
-export interface UserModel {
+export interface AdoptionFilterUser {
   email: string;
+  displayName: string;
+}
+
+export interface AdoptionFilterProject {
   projectId: string;
-  organization: string;
-  app_deployed_count: number;
-  app_generated_count: number;
-  eventsLast4Weeks: number;
-  fullName: string;
-  lastCodeGenieEventOn: string | null;
   projectName: string;
-  status: string;
+  organization: string;
+  users: AdoptionFilterUser[];
+}
+
+export interface AdoptionFilterTree {
+  projects: AdoptionFilterProject[];
+}
+
+export interface AdoptionSummaryResponse {
+  status_code: number;
+  summary: AdoptionSummaryTotals;
+  filterTree: AdoptionFilterTree;
+  detail: string;
+}
+
+export type AdoptionGranularity = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
+
+export interface AdoptionInsightsRequest {
+  projectIds?: string[];
+  users?: string[];
+  startDate?: string;
+  endDate?: string;
+  granularity?: AdoptionGranularity;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdoptionCards {
+  totalPeriods: number;
+  uniqueUsers: number;
+  uniqueBuildspaces: number;
+  totalPrompts: number;
   totalCost: number;
-  totalEvents: number;
-  domain:string;
+  agenticTasks: number;
+  infraRuntimeMinutes: number;
+  userSessionMinutes: number;
+  peakPeriod: string | null;
 }
 
-export interface UserLevelInsightsResponse {
+export interface AdoptionSeriesBucket {
+  bucketStart: string;
+  users: number;
+  buildspaces: number;
+  prompts: number;
+  cost: number;
+  agenticTasks: number;
+  infraRuntimeMinutes: number;
+  userSessionMinutes: number;
+}
+
+export interface AdoptionTableRow {
+  _id?: string;
+  projectId: string;
+  projectName: string;
+  buildSpaceId: string;
+  name: string;
+  email?: string;
+  taskId?: string;
+  date: string;
+  cost?: number;
+  usageCount?: number;
+  duration_minutes?: number;
+  devzone_total_runtime_minutes?: number;
+}
+
+export interface AdoptionTable {
+  rows: AdoptionTableRow[];
+  page: number;
+  pageSize: number;
+  totalRows: number;
+}
+
+export interface AdoptionInsightsResponse {
   status_code: number;
-  count: number;
-  users: UserModel[];
-}
-
-
-export interface UserExtendedModel {
-    date: string,
-    email: string,
-    projectId: string,
-    taskId: string,
-    user: string,
-    cost: Number,
-    usageCount: Number,
-    domain: string,
-    name: string,
-    buildSpaceId: string | undefined,
-    projectName: string
-}
-
-export interface UserLevelExtendedInsightsResponse {
-  status_code: number;
-  count: number;
-  users_extended: UserExtendedModel[];
+  cards: AdoptionCards;
+  series: AdoptionSeriesBucket[];
+  table: AdoptionTable;
+  detail: string;
 }

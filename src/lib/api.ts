@@ -1,4 +1,4 @@
-import { LoginRequest, LoginResponse, RefreshTokenRequest, OrganizationLevelInsightsResponse, ProjectLevelInsightsResponse, UserLevelInsightsResponse, UserLevelExtendedInsightsResponse } from '@/types'
+import { LoginRequest, LoginResponse, RefreshTokenRequest, AdoptionSummaryResponse, AdoptionInsightsRequest, AdoptionInsightsResponse } from '@/types'
 
 const LEGACY_APP_URL = process.env.NEXT_PUBLIC_LEGACY_APP_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -175,101 +175,18 @@ export async function apiRequest<T>(
   }
 }
 
-export async function getOrganizationLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<OrganizationLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+// ===== Adoption Dashboard =====
 
-  return apiRequest<OrganizationLevelInsightsResponse>(url)
+export async function getAdoptionSummary(): Promise<AdoptionSummaryResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/summary`
+  return apiRequest<AdoptionSummaryResponse>(url)
 }
 
-export async function getprojectLevelInsights(filters: Record<string, string | undefined | boolean> = {}): Promise<ProjectLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
-
-  return apiRequest<ProjectLevelInsightsResponse>(url)
-}
-
-export async function getUserLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
-
-  return apiRequest<UserLevelInsightsResponse>(url)
-}
-
-export async function getUserLevelExtendedInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelExtendedInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
-
-  return apiRequest<UserLevelExtendedInsightsResponse>(url)
-}
-
-// Update functions for pivot table data
-export async function updateOrganizationData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ organizations: data }),
-  })
-}
-
-export async function updateProjectData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ projects: data }),
-  })
-}
-
-export async function updateUserData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ users: data }),
-  })
-}
-
-// Update functions for pivot table data
-export async function updateUserExtendedData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ users: data }),
+export async function getAdoptionInsights(body: AdoptionInsightsRequest = {}): Promise<AdoptionInsightsResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/insights`
+  return apiRequest<AdoptionInsightsResponse>(url, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
