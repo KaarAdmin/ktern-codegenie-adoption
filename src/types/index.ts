@@ -25,15 +25,12 @@ export interface User {
 // ===== Adoption Dashboard =====
 
 export interface AdoptionSummaryTotals {
-  projects: number;
-  buildspaces: number;
-  users: number;
+  uniqueProjects: number;
+  uniqueUsers: number;
   agenticTasks: number;
-  prompts: number;
-  cost: number;
+  totalPrompts: number;
+  totalCost: number;
   infraRuntimeMinutes: number;
-  userSessionMinutes: number;
-  organizations: number;
 }
 
 export interface AdoptionFilterUser {
@@ -61,65 +58,97 @@ export interface AdoptionSummaryResponse {
 
 export type AdoptionGranularity = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
 
+/**
+ * Filter selection accepted by `POST /insights`. There is no pagination, so
+ * `page`/`pageSize` are intentionally absent.
+ */
 export interface AdoptionInsightsRequest {
   projectIds?: string[];
   users?: string[];
   startDate?: string;
   endDate?: string;
   granularity?: AdoptionGranularity;
-  page?: number;
-  pageSize?: number;
 }
 
+/**
+ * Overall summary KPIs for the current filter selection. These are aggregate
+ * totals only — there are no series-derived fields (peakPeriod / averages /
+ * totalPeriods) since the endpoint no longer emits a time series.
+ */
 export interface AdoptionCards {
-  totalPeriods: number;
   uniqueUsers: number;
-  uniqueBuildspaces: number;
+  uniqueProjects: number;
   totalPrompts: number;
   totalCost: number;
   agenticTasks: number;
   infraRuntimeMinutes: number;
   userSessionMinutes: number;
-  peakPeriod: string | null;
 }
 
-export interface AdoptionSeriesBucket {
-  bucketStart: string;
-  users: number;
-  buildspaces: number;
-  prompts: number;
-  cost: number;
-  agenticTasks: number;
-  infraRuntimeMinutes: number;
-  userSessionMinutes: number;
-}
-
+/**
+ * Grouped table row from `POST /insights`. Rows are grouped by
+ * `(email, projectId, granularity-bucket)`, summing cost and prompts. The
+ * client draws the chart from these rows, so no separate series is sent.
+ */
 export interface AdoptionTableRow {
-  _id?: string;
   projectId: string;
   projectName: string;
-  buildSpaceId: string;
-  name: string;
-  email?: string;
-  taskId?: string;
-  date: string;
-  cost?: number;
-  usageCount?: number;
-  duration_minutes?: number;
-  devzone_total_runtime_minutes?: number;
+  email: string;
+  name: string | null;
+  domain: string | null;
+  user: string | null;
+  cost: number;
+  usageCount: number;
+  date: string | null;
 }
 
-export interface AdoptionTable {
-  rows: AdoptionTableRow[];
-  page: number;
-  pageSize: number;
-  totalRows: number;
-}
-
+/**
+ * Response of `POST /insights` — the summary cards plus the full, capped,
+ * granularity-grouped table in one payload.
+ */
 export interface AdoptionInsightsResponse {
   status_code: number;
   cards: AdoptionCards;
-  series: AdoptionSeriesBucket[];
-  table: AdoptionTable;
+  rows: AdoptionTableRow[];
+  totalRows: number;
+  detail: string;
+}
+
+/** Payload of a `400 TABLE_TOO_LARGE` error from `/insights`. */
+export interface AdoptionTableTooLargeDetail {
+  code: 'TABLE_TOO_LARGE';
+  message: string;
+  rowCount: number;
+}
+
+// ===== Token Allocation =====
+
+export interface TokenAllocationProject {
+  _id: string;
+  projectID: string;
+  projectName: string;
+  isCodeGenie: boolean;
+  allocatedCost: number | null;
+}
+
+export interface TokenAllocationResponse {
+  status_code: number;
+  projects: TokenAllocationProject[];
+  totalProjects: number;
+  detail: string;
+}
+
+/**
+ * Request body for `PATCH /adoptionDashboard/token-allocation/{project_id}`.
+ * Both fields are optional, but at least one must be provided.
+ */
+export interface UpdateTokenAllocationRequest {
+  isCodeGenie?: boolean;
+  allocatedCost?: number;
+}
+
+export interface UpdateTokenAllocationResponse {
+  status_code: number;
+  project?: TokenAllocationProject;
   detail: string;
 }
