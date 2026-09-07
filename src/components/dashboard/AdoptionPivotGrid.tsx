@@ -45,12 +45,12 @@ export function AdoptionPivotGrid({ rows, loading = false, className = '' }: Ado
     () => [
       {
         field: 'date',
-        headerName: 'Date',
+        headerName: 'Period',
         enableRowGroup: true,
         enablePivot: true,
         filter: 'agDateColumnFilter',
         sortable: true,
-        // Group by calendar day
+        // `date` is the bucket-end day (or null for the "all" granularity).
         valueGetter: (params) => {
           const d = params.data?.date ? new Date(params.data.date) : null
           if (!d || isNaN(d.getTime())) return ''
@@ -78,14 +78,6 @@ export function AdoptionPivotGrid({ rows, loading = false, className = '' }: Ado
         field: 'email',
         headerName: 'Email',
         hide: true,
-        enableRowGroup: true,
-        enablePivot: true,
-        filter: 'agTextColumnFilter',
-        sortable: true,
-      },
-      {
-        field: 'buildSpaceId',
-        headerName: 'Buildspace',
         enableRowGroup: true,
         enablePivot: true,
         filter: 'agTextColumnFilter',
@@ -176,7 +168,7 @@ export function AdoptionPivotGrid({ rows, loading = false, className = '' }: Ado
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-800">Raw usage rows</h2>
+          <h2 className="text-sm font-semibold text-gray-800">Grouped usage rows</h2>
           <span className="text-xs text-gray-500">
             {rows.length.toLocaleString()} rows{loading ? ' • Loading…' : ''}
           </span>
