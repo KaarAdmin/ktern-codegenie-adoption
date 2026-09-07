@@ -1,4 +1,4 @@
-import { LoginRequest, LoginResponse, RefreshTokenRequest, OrganizationLevelInsightsResponse, ProjectLevelInsightsResponse, UserLevelInsightsResponse, UserLevelExtendedInsightsResponse } from '@/types'
+import { LoginRequest, LoginResponse, RefreshTokenRequest, AdoptionSummaryResponse, AdoptionInsightsRequest, AdoptionInsightsResponse, AdoptionTableTooLargeDetail, TokenAllocationResponse, UpdateTokenAllocationRequest, UpdateTokenAllocationResponse } from '@/types'
 
 const LEGACY_APP_URL = process.env.NEXT_PUBLIC_LEGACY_APP_URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL
@@ -9,6 +9,34 @@ class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
+
+/**
+ * Raised when `/insights` returns `400` with a `TABLE_TOO_LARGE` detail.
+ * Carries the offending `rowCount` so the UI can prompt the user to narrow the
+ * selection or pick a coarser granularity.
+ */
+export class TableTooLargeError extends ApiError {
+  constructor(public rowCount: number, message: string) {
+    super(400, message)
+    this.name = 'TableTooLargeError'
+  }
+}
+
+/**
+ * Raised when the backend rejects a token-allocation request because the user
+ * lacks the restricted access required to view or edit it. Callers should
+ * redirect the user to `/dashboard`.
+ */
+export class TokenAllocationForbiddenError extends ApiError {
+  constructor(message: string) {
+    super(403, message)
+    this.name = 'TokenAllocationForbiddenError'
+  }
+}
+
+/** Backend message returned when the user may not view/edit token allocation. */
+const TOKEN_ALLOCATION_FORBIDDEN_DETAIL =
+  'You are not authorized to edit adoption dashboard token allocation'
 
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   try {
@@ -161,6 +189,15 @@ export async function apiRequest<T>(
       }
     }
 
+    // Authorization failure for token allocation — surface a dedicated error so
+    // callers can redirect the user to /dashboard.
+    if (
+      responseData?.detail &&
+      String(responseData.detail).includes(TOKEN_ALLOCATION_FORBIDDEN_DETAIL)
+    ) {
+      throw new TokenAllocationForbiddenError(String(responseData.detail))
+    }
+
     // Return the new response data
     if (!response.ok) {
       throw new ApiError(response.status, `API request failed: ${response.statusText}`)
@@ -175,101 +212,80 @@ export async function apiRequest<T>(
   }
 }
 
-export async function getOrganizationLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<OrganizationLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
+// ===== Adoption Dashboard =====
+
+export async function getAdoptionSummary(): Promise<AdoptionSummaryResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/summary`
+  return apiRequest<AdoptionSummaryResponse>(url)
+}
+
+/**
+ * Fetches the adoption dashboard insights: summary cards plus the full, capped,
+ * granularity-grouped table in one request. There is no pagination — the entire
+ * dataset is loaded into the client-side grid, which also feeds the chart.
+ *
+ * Throws {@link TableTooLargeError} when the backend rejects the request with a
+ * `400 TABLE_TOO_LARGE` payload, so callers can surface the row count.
+ */
+export async function getAdoptionInsights(body: AdoptionInsightsRequest = {}): Promise<AdoptionInsightsResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/insights`
+  const token = typeof window !== 'undefined' ? localStorage.getItem('ktoken') : null
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify(body),
+  })
+
+  let data: unknown
+  try {
+    data = await response.json()
+  } catch {
+    if (!response.ok) {
+      throw new ApiError(response.status, `API request failed: ${response.statusText}`)
     }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+    throw new ApiError(500, 'Invalid insights response')
+  }
 
-  return apiRequest<OrganizationLevelInsightsResponse>(url)
-}
-
-export async function getprojectLevelInsights(filters: Record<string, string | undefined | boolean> = {}): Promise<ProjectLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
+  if (response.status === 400) {
+    const detail = (data as { detail?: AdoptionTableTooLargeDetail })?.detail
+    if (detail && typeof detail === 'object' && detail.code === 'TABLE_TOO_LARGE') {
+      throw new TableTooLargeError(detail.rowCount, detail.message)
     }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
+  }
 
-  return apiRequest<ProjectLevelInsightsResponse>(url)
+  if (!response.ok) {
+    throw new ApiError(response.status, `API request failed: ${response.statusText}`)
+  }
+
+  return data as AdoptionInsightsResponse
 }
 
-export async function getUserLevelInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
-
-  return apiRequest<UserLevelInsightsResponse>(url)
+/**
+ * Fetches the list of projects with their CodeGenie token allocation state.
+ */
+export async function getTokenAllocation(): Promise<TokenAllocationResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/token-allocation`
+  return apiRequest<TokenAllocationResponse>(url)
 }
 
-export async function getUserLevelExtendedInsightsResponse(filters: Record<string, string | undefined | boolean> = {}): Promise<UserLevelExtendedInsightsResponse> {
-  const queryParams = new URLSearchParams()
-  
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined) {
-      // Convert boolean to string
-      queryParams.append(key, typeof value === 'boolean' ? String(value) : value)
-    }
-  })
-  // console.log('Query Params:', queryParams.toString())
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights${queryParams.toString()? `?${queryParams.toString()}` : ''}`
-
-  return apiRequest<UserLevelExtendedInsightsResponse>(url)
-}
-
-// Update functions for pivot table data
-export async function updateOrganizationData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/organizationLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ organizations: data }),
-  })
-}
-
-export async function updateProjectData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/projectLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ projects: data }),
-  })
-}
-
-export async function updateUserData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ users: data }),
-  })
-}
-
-// Update functions for pivot table data
-export async function updateUserExtendedData(data: any[]): Promise<{ status_code: Number; detail: string }> {
-  const url = `${API_BASE_URL}/codegenie/api/general/userLevelExtendedInsights`
-  
-  return apiRequest<{ status_code: Number; detail: string }>(url, {
-    method: 'PUT',
-    body: JSON.stringify({ users: data }),
+/**
+ * Updates the CodeGenie token allocation for a single project.
+ *
+ * Both fields are optional, but at least one must be provided. `isCodeGenie`
+ * is a one-way enable — the UI never sends `false`.
+ */
+export async function updateTokenAllocation(
+  projectId: string,
+  body: UpdateTokenAllocationRequest
+): Promise<UpdateTokenAllocationResponse> {
+  const url = `${API_BASE_URL}/codegenie/api/adoptionDashboard/token-allocation/${projectId}`
+  return apiRequest<UpdateTokenAllocationResponse>(url, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
   })
 }
 

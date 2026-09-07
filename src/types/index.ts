@@ -22,109 +22,133 @@ export interface User {
 }
 
 
-export interface OrganizationLevelInsightsResponse {
-  status_code: number;
-  count: number;
-  organizations: OrganizationModel[];
-}
+// ===== Adoption Dashboard =====
 
-export interface OrganizationModel {
-  organization: string;
-  active: boolean;
-  app_deployed_count: number;
-  app_generated_count: number;
-  country: string;
-  createdOn: string;
-  eventsLast4Weeks: number;
-  industry: string;
-  lastCodeGenieEventOn: string | null;
-  sbu: string;
-  totalActiveProject: number;
-  totalActiveUser: number;
+export interface AdoptionSummaryTotals {
+  uniqueProjects: number;
+  uniqueUsers: number;
+  agenticTasks: number;
+  totalPrompts: number;
   totalCost: number;
-  totalEvents: number;
-  totalProject: number;
-  totalUsers: number;
-  totalUsersAccepted: number;
-  totalUsersInvited: number;
-  globalTotalActiveUser: number;
-  globalTotalUsers: number;
-  globalTotalUsersAccepted: number;
-  globalTotalUsersInvited: number;
+  infraRuntimeMinutes: number;
 }
 
-
-export interface ProjectModel {
-  projectId: string;
-  projectName: string;
-  createdOn: string;
-  country: string;
-  sbu: string;
-  industry: string;
-  active: boolean;
-  organizations: string[];
-  totalUsers: number;
-  totalUsersInvited: number;
-  totalUsersAccepted: number;
-  totalActiveUser: number;
-  lastCodeGenieEventOn: string | null;
-  app_deployed_count: number;
-  app_generated_count: number;
-  totalEvents: number;
-  totalCost: number;
-  eventsLast4Weeks: number;
-  globalTotalActiveUser: number;
-  globalTotalUsers: number;
-  globalTotalUsersAccepted: number;
-  globalTotalUsersInvited: number;
-}
-
-export interface ProjectLevelInsightsResponse {
-  status_code: number;
-  count: number;
-  projects: ProjectModel[];
-}
-
-
-export interface UserModel {
+export interface AdoptionFilterUser {
   email: string;
+  displayName: string;
+}
+
+export interface AdoptionFilterProject {
   projectId: string;
-  organization: string;
-  app_deployed_count: number;
-  app_generated_count: number;
-  eventsLast4Weeks: number;
-  fullName: string;
-  lastCodeGenieEventOn: string | null;
   projectName: string;
-  status: string;
+  organization: string;
+  users: AdoptionFilterUser[];
+}
+
+export interface AdoptionFilterTree {
+  projects: AdoptionFilterProject[];
+}
+
+export interface AdoptionSummaryResponse {
+  status_code: number;
+  summary: AdoptionSummaryTotals;
+  filterTree: AdoptionFilterTree;
+  detail: string;
+}
+
+export type AdoptionGranularity = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
+
+/**
+ * Filter selection accepted by `POST /insights`. There is no pagination, so
+ * `page`/`pageSize` are intentionally absent.
+ */
+export interface AdoptionInsightsRequest {
+  projectIds?: string[];
+  users?: string[];
+  startDate?: string;
+  endDate?: string;
+  granularity?: AdoptionGranularity;
+}
+
+/**
+ * Overall summary KPIs for the current filter selection. These are aggregate
+ * totals only — there are no series-derived fields (peakPeriod / averages /
+ * totalPeriods) since the endpoint no longer emits a time series.
+ */
+export interface AdoptionCards {
+  uniqueUsers: number;
+  uniqueProjects: number;
+  totalPrompts: number;
   totalCost: number;
-  totalEvents: number;
-  domain:string;
+  agenticTasks: number;
+  infraRuntimeMinutes: number;
+  userSessionMinutes: number;
 }
 
-export interface UserLevelInsightsResponse {
+/**
+ * Grouped table row from `POST /insights`. Rows are grouped by
+ * `(email, projectId, granularity-bucket)`, summing cost and prompts. The
+ * client draws the chart from these rows, so no separate series is sent.
+ */
+export interface AdoptionTableRow {
+  projectId: string;
+  projectName: string;
+  email: string;
+  name: string | null;
+  domain: string | null;
+  user: string | null;
+  cost: number;
+  usageCount: number;
+  date: string | null;
+}
+
+/**
+ * Response of `POST /insights` — the summary cards plus the full, capped,
+ * granularity-grouped table in one payload.
+ */
+export interface AdoptionInsightsResponse {
   status_code: number;
-  count: number;
-  users: UserModel[];
+  cards: AdoptionCards;
+  rows: AdoptionTableRow[];
+  totalRows: number;
+  detail: string;
 }
 
-
-export interface UserExtendedModel {
-    date: string,
-    email: string,
-    projectId: string,
-    taskId: string,
-    user: string,
-    cost: Number,
-    usageCount: Number,
-    domain: string,
-    name: string,
-    buildSpaceId: string | undefined,
-    projectName: string
+/** Payload of a `400 TABLE_TOO_LARGE` error from `/insights`. */
+export interface AdoptionTableTooLargeDetail {
+  code: 'TABLE_TOO_LARGE';
+  message: string;
+  rowCount: number;
 }
 
-export interface UserLevelExtendedInsightsResponse {
+// ===== Token Allocation =====
+
+export interface TokenAllocationProject {
+  _id: string;
+  projectID: string;
+  projectName: string;
+  isCodeGenie: boolean;
+  allocatedCost: number | null;
+}
+
+export interface TokenAllocationResponse {
   status_code: number;
-  count: number;
-  users_extended: UserExtendedModel[];
+  projects: TokenAllocationProject[];
+  totalProjects: number;
+  detail: string;
+}
+
+/**
+ * Request body for `PATCH /adoptionDashboard/token-allocation/{project_id}`.
+ * Both fields are optional, but at least one must be provided.
+ */
+export interface UpdateTokenAllocationRequest {
+  isCodeGenie?: boolean;
+  allocatedCost?: number;
+}
+
+export interface UpdateTokenAllocationResponse {
+  status_code: number;
+  project?: TokenAllocationProject;
+  detail: string;
 }

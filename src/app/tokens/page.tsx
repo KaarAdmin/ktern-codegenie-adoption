@@ -4,10 +4,10 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/Button'
-import { AdoptionDashboard } from '@/components/dashboard/AdoptionDashboard'
+import { TokenAllocation } from '@/components/tokens/TokenAllocation'
 import { LogOut } from 'lucide-react'
 
-export default function AdoptionPage() {
+export default function TokensPage() {
   const { user, logout, loading: authLoading } = useAuth()
   const router = useRouter()
 
@@ -43,8 +43,8 @@ export default function AdoptionPage() {
                 className="h-8 w-auto"
               />
               <div className="hidden sm:block border-l border-gray-200 pl-4">
-                <h1 className="text-lg font-semibold text-gray-900">Adoption Dashboard</h1>
-                <p className="text-xs text-gray-500">Cross-project usage insights</p>
+                <h1 className="text-lg font-semibold text-gray-900">Token Allocation</h1>
+                <p className="text-xs text-gray-500">Project subscription overview</p>
               </div>
             </div>
 
@@ -65,7 +65,7 @@ export default function AdoptionPage() {
 
       {/* Main Content */}
       <main className="w-full px-4 sm:px-6 lg:px-8 py-2">
-        <AdoptionDashboard />
+        <TokenAllocation />
       </main>
     </div>
   )
