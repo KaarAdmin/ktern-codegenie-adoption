@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import { ColDef, GridReadyEvent, GridApi, ColumnApi } from 'ag-grid-community'
 import { getUserLevelExtendedInsightsResponse, updateUserExtendedData } from '@/lib/api'
@@ -9,9 +9,8 @@ import { ExportDropdown } from '@/components/ui/ExportDropdown'
 import { Card } from '@/components/ui/Card'
 import { isAuthorizedUser, getCurrentUserEmail } from '@/lib/auth'
 import { useToastActions } from '@/contexts/ToastContext'
-import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare, Activity, ChevronDown, X, Check } from 'lucide-react'
+import { Calendar, Filter, RefreshCw, Users, Building2, FolderOpen, Layers, DollarSign, Zap, MessageSquare, Activity } from 'lucide-react'
 import { WeeklyStatsAnalytics } from './WeeklyStatsAnalytics'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import 'ag-grid-enterprise'
 
 interface UserExtendedInsightsProps {
@@ -65,12 +64,7 @@ export function UserExtendedInsights({
   const [changedRowsDetails, setChangedRowsDetails] = useState<Map<string, { fields: Set<string>, uniqueKey?: string }>>(new Map())
   const [isUserAuthorized, setIsUserAuthorized] = useState(false)
 
-  // Multi-project filter state
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
-  const [projectSearchTerm, setProjectSearchTerm] = useState('')
-  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
-
-  const { showSuccess, showError } = useToastActions()
+  const { showSuccess, showError, showWarning, showInfo } = useToastActions()
 
   // Check user authorization on component mount
   useEffect(() => {
@@ -120,81 +114,9 @@ export function UserExtendedInsights({
     loadData()
   }, [loadData])
 
-  // Derive unique project list from loaded data
-  const availableProjects = useMemo(() => {
-    const seen = new Map<string, string>() // id -> projectName
-    let hasUnassigned = false
-
-    data.forEach(item => {
-      // Fallback to projectName if projectId is missing to maintain legacy single-select behavior
-      const id = item.projectId || item.projectName
-      if (id) {
-        if (!seen.has(id)) {
-          seen.set(id, item.projectName || id)
-        }
-      } else {
-        hasUnassigned = true
-      }
-    })
-
-    const projects = Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-
-    if (hasUnassigned) {
-      projects.push({ id: 'UNASSIGNED_PROJECT', name: 'Unassigned / No Project' })
-    }
-
-    return projects
-  }, [data])
-
-  // Filtered project list based on search term in dropdown
-  const filteredAvailableProjects = useMemo(() => {
-    if (!projectSearchTerm.trim()) return availableProjects
-    const lower = projectSearchTerm.toLowerCase()
-    return availableProjects.filter(p => p.name.toLowerCase().includes(lower))
-  }, [availableProjects, projectSearchTerm])
-
-  // The data slice used by all views — respects multi-project selection.
-  const filteredData = useMemo(() => {
-    if (selectedProjectIds.length === 0) return data
-    const idSet = new Set(selectedProjectIds)
-    return data.filter(item => {
-      const id = item.projectId || item.projectName
-      if (id) {
-        return idSet.has(id)
-      }
-      return idSet.has('UNASSIGNED_PROJECT')
-    })
-  }, [data, selectedProjectIds])
-
-  // Project dropdown handlers
-  const handleToggleProject = useCallback((projectId: string) => {
-    setSelectedProjectIds(prev =>
-      prev.includes(projectId)
-        ? prev.filter(id => id !== projectId)
-        : [...prev, projectId]
-    )
-  }, [])
-
-  const handleSelectAllProjects = useCallback(() => {
-    setSelectedProjectIds([])
-  }, [])
-
-  const handleClearProjectFilter = useCallback(() => {
-    setSelectedProjectIds([])
-    setProjectSearchTerm('')
-  }, [])
-
-  // Close dropdown when clicking outside
-  const projectDropdownRef = useRef<HTMLDivElement>(null)
-  useClickOutside(projectDropdownRef, () => {
-    setShowProjectDropdown(false)
-  })
-
   // Calculate summary statistics
   const summaryStats = useMemo((): SummaryStats => {
-    if (!filteredData.length) {
+    if (!data.length) {
       return {
         totalOrganizations: 0,
         totalProjects: 0,
@@ -206,14 +128,14 @@ export function UserExtendedInsights({
       }
     }
 
-    const uniqueDomains = new Set(filteredData.map(item => item.domain).filter(Boolean))
-    const uniqueProjects = new Set(filteredData.map(item => item.projectId).filter(Boolean))
-    const uniqueBuildspaces = new Set(filteredData.filter(item => item.buildSpaceId).map(item => item.buildSpaceId))
-    const uniqueUsers = new Set(filteredData.map(item => item.email).filter(Boolean))
-    const uniqueTaskIds = new Set(filteredData.map(item => item.taskId).filter(Boolean))
+    const uniqueDomains = new Set(data.map(item => item.domain).filter(Boolean))
+    const uniqueProjects = new Set(data.map(item => item.projectId).filter(Boolean))
+    const uniqueBuildspaces = new Set(data.filter(item => item.buildSpaceId).map(item => item.buildSpaceId))
+    const uniqueUsers = new Set(data.map(item => item.email).filter(Boolean))
+    const uniqueTaskIds = new Set(data.map(item => item.taskId).filter(Boolean))
 
-    const totalCost = filteredData.reduce((sum, item) => sum + (Number(item.cost) || 0), 0)
-    const totalPrompts = filteredData.reduce((sum, item) => sum + (Number(item.usageCount) || 0), 0)
+    const totalCost = data.reduce((sum, item) => sum + (Number(item.cost) || 0), 0)
+    const totalPrompts = data.reduce((sum, item) => sum + (Number(item.usageCount) || 0), 0)
 
     return {
       totalOrganizations: uniqueDomains.size || 0,
@@ -224,11 +146,11 @@ export function UserExtendedInsights({
       totalAgenticCost: uniqueTaskIds.size || 0,
       totalPrompts: totalPrompts || 0
     }
-  }, [filteredData])
+  }, [data])
 
   // Calculate Top 5 Organizations
   const topOrganizations = useMemo((): TopOrganization[] => {
-    if (!filteredData.length) return []
+    if (!data.length) return []
 
     const orgMap = new Map<string, {
       domain: string
@@ -238,7 +160,7 @@ export function UserExtendedInsights({
     }>()
 
     // Aggregate data by domain
-    filteredData.forEach(item => {
+    data.forEach(item => {
       if (!orgMap.has(item.domain)) {
         orgMap.set(item.domain, {
           domain: item.domain,
@@ -267,11 +189,11 @@ export function UserExtendedInsights({
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, 5)
-  }, [filteredData])
+  }, [data])
 
   // Calculate Top 5 Users
   const topUsers = useMemo((): TopUser[] => {
-    if (!filteredData.length) return []
+    if (!data.length) return []
 
     const userMap = new Map<string, {
       name: string
@@ -282,7 +204,7 @@ export function UserExtendedInsights({
     }>()
 
     // Aggregate data by user name
-    filteredData.forEach(item => {
+    data.forEach(item => {
       if (!userMap.has(item.name)) {
         userMap.set(item.name, {
           name: item.name,
@@ -314,7 +236,7 @@ export function UserExtendedInsights({
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, 5)
-  }, [filteredData])
+  }, [data])
 
   const onGridReady = useCallback((params: GridReadyEvent) => {
     setGridApi(params.api)
@@ -551,13 +473,11 @@ export function UserExtendedInsights({
     return null
   }, [changedRows])
 
-  // Generate monthly cost columns dynamically.
-  // Deliberately uses full `data` (not filteredData) so columns stay stable
-  // and never appear/disappear when the project filter changes.
+  // Generate monthly cost columns dynamically
   const monthlyColumns = useMemo(() => {
     if (!data.length) return []
 
-    // Get unique months from the full dataset
+    // Get unique months from the data
     const monthsSet = new Set<string>()
     data.forEach(item => {
       if (item.date) {
@@ -932,7 +852,7 @@ export function UserExtendedInsights({
     },
     // Add monthly cost columns dynamically
     ...monthlyColumns
-  ], [isRowEditable, getCellStyle, monthlyColumns, isPivotMode])
+  ], [isRowEditable, getCellStyle, data, monthlyColumns, isPivotMode])
 
   const defaultColDef = useMemo(() => ({
     sortable: true,
@@ -1131,13 +1051,7 @@ export function UserExtendedInsights({
           </div>
           
           {/* WeeklyStatsAnalytics Component */}
-          <WeeklyStatsAnalytics
-            data={filteredData}
-            allData={data}
-            selectedProjectIds={selectedProjectIds}
-            onProjectToggle={handleToggleProject}
-            onProjectClear={handleClearProjectFilter}
-          />
+          <WeeklyStatsAnalytics data={data} />
         </div>
       </Card>
 
@@ -1270,132 +1184,11 @@ export function UserExtendedInsights({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">Executive Overview Insights • Total {filteredData.length} records{selectedProjectIds.length > 0 ? ` (${selectedProjectIds.length} project${selectedProjectIds.length > 1 ? 's' : ''} selected)` : ''} {loading && ' • Loading...'}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Executive Overview Insights • Total {data.length} records {loading && ' • Loading...'}</h2>
         </div>
         
         {/* Search and Controls */}
         <div className="flex items-center space-x-3">
-          {/* Multi-Project Filter Dropdown */}
-          <div className="relative" data-project-dropdown ref={projectDropdownRef}>
-            <button
-              onClick={() => setShowProjectDropdown(prev => !prev)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
-                selectedProjectIds.length > 0
-                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <FolderOpen className="h-3.5 w-3.5" />
-              <span>
-                {selectedProjectIds.length === 0
-                  ? 'All Projects'
-                  : `${selectedProjectIds.length} Project${selectedProjectIds.length > 1 ? 's' : ''}`}
-              </span>
-              {selectedProjectIds.length > 0 ? (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={e => { e.stopPropagation(); handleClearProjectFilter() }}
-                  onKeyDown={e => e.key === 'Enter' && (e.stopPropagation(), handleClearProjectFilter())}
-                  className="ml-0.5 hover:text-blue-200"
-                  title="Clear project filter"
-                >
-                  <X className="h-3 w-3" />
-                </span>
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </button>
-
-            {showProjectDropdown && (
-              <div className="absolute left-0 top-full mt-1 z-50 w-72 bg-white border border-gray-200 rounded-lg shadow-lg">
-                {/* Search inside dropdown */}
-                <div className="p-2 border-b border-gray-100">
-                  <input
-                    type="text"
-                    value={projectSearchTerm}
-                    onChange={e => setProjectSearchTerm(e.target.value)}
-                    placeholder="Search projects..."
-                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </div>
-
-                {/* Select All / Clear row */}
-                <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 bg-gray-50">
-                  <button
-                    onClick={handleSelectAllProjects}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Show All
-                  </button>
-                  {selectedProjectIds.length > 0 && (
-                    <button
-                      onClick={handleClearProjectFilter}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Clear ({selectedProjectIds.length})
-                    </button>
-                  )}
-                  <span className="text-xs text-gray-400">
-                    {filteredAvailableProjects.length} / {availableProjects.length}
-                  </span>
-                </div>
-
-                {/* Project list */}
-                <div className="max-h-60 overflow-y-auto py-1">
-                  {/* All Projects Option */}
-                  <button
-                    onClick={handleSelectAllProjects}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors border-b border-gray-100 ${
-                      selectedProjectIds.length === 0 ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
-                      selectedProjectIds.length === 0
-                        ? 'bg-blue-600 border-blue-600'
-                        : 'border-gray-300 bg-white'
-                    }`}>
-                      {selectedProjectIds.length === 0 && <Check className="h-3 w-3 text-white" />}
-                    </div>
-                    <span className={`truncate ${selectedProjectIds.length === 0 ? 'text-blue-800 font-medium' : 'text-gray-700'}`}>
-                      All Projects
-                    </span>
-                    <span className="text-xs text-gray-400 ml-auto">({availableProjects.length})</span>
-                  </button>
-                  
-                  {filteredAvailableProjects.length === 0 ? (
-                    <div className="px-3 py-4 text-xs text-gray-500 text-center">No projects found</div>
-                  ) : (
-                    filteredAvailableProjects.map(project => {
-                      const isSelected = selectedProjectIds.includes(project.id)
-                      return (
-                        <button
-                          key={project.id}
-                          onClick={() => handleToggleProject(project.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-gray-50 transition-colors ${
-                            isSelected ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <div className={`flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center ${
-                            isSelected
-                              ? 'bg-blue-600 border-blue-600'
-                              : 'border-gray-300 bg-white'
-                          }`}>
-                            {isSelected && <Check className="h-3 w-3 text-white" />}
-                          </div>
-                          <span className={`truncate ${isSelected ? 'text-blue-800 font-medium' : 'text-gray-700'}`}>
-                            {project.name}
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Search Input */}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1489,7 +1282,7 @@ export function UserExtendedInsights({
       <div className="ag-theme-alpine" style={{ height: '600px', width: '100%' }}>
         <AgGridReact
           columnDefs={columnDefs}
-          rowData={filteredData}
+          rowData={data}
           defaultColDef={defaultColDef}
           autoGroupColumnDef={autoGroupColumnDef}
           onGridReady={onGridReady}
